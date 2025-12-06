@@ -1,0 +1,83 @@
+# .gitea/workflows/developer.yaml
+name: Developer CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, backend]
+
+jobs:
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Set environment variables
+        run: |
+          echo "REPO_LOWER=$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]'):latest" >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Run tests
+        working-directory: ./services/backend
+        run: |
+          go test ./...
+
+      - name: Build image
+        working-directory: ./services/backend
+        run: |
+          docker build \
+            --build-arg PORT=${{ vars.BACKEND_PORT }} \
+            -t backend:${{ gitea.sha }} .
+
+      - name: Push to registry
+        run: |
+          echo ${{ secrets.REGISTRY_TOKEN }} | \
+          docker login ${{ vars.HOST }}:${{ vars.PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          
+          docker tag backend:${{ gitea.sha }} ${{ env.IMAGE_NAME }}
+          docker push ${{ env.IMAGE_NAME }}
+
+  deploy:
+    needs: build-and-push  # Запускается только после успешной сборки
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'  # Деплой только для main ветки
+    steps:
+      - name: Set environment variables
+        run: |
+          echo "REPO_LOWER=$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]'):latest" >> $GITHUB_ENV
+
+      - name: Login to registry
+        run: |
+          echo ${{ secrets.REGISTRY_TOKEN }} | \
+          docker login ${{ vars.HOST }}:${{ vars.PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
+      - name: Pull latest image
+        run: docker pull ${{ env.IMAGE_NAME }}
+
+      - name: Stop old container
+        run: |
+          docker stop backend-app || true
+          docker rm backend-app || true
+
+      - name: Start new container
+        run: |
+          docker run -d \
+            --name backend-app \
+            --restart unless-stopped \
+            -p ${{ vars.BACKEND_PORT }}:${{ vars.BACKEND_PORT }} \
+            -e PORT=${{ vars.BACKEND_PORT }} \
+            -e ENVIRONMENT=production \
+            ${{ env.IMAGE_NAME }}
+
+      - name: Health check
+        run: |
+          sleep 5
+          curl -f http://${{ vars.HOST }}:${{ vars.BACKEND_PORT }}/health || exit 1
+          echo "✅ Deployment successful!"
