@@ -16,8 +16,8 @@ jobs:
       - name: Set environment variables
         run: |
           echo "REPO_LOWER=$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-          echo "PIPLINE_NAME=backend"
-          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/${{ env.REPO_LOWER }}/${{ env.PIPLINE_NAME }}:latest" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]'):latest" >> $GITHUB_ENV
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -51,8 +51,8 @@ jobs:
       - name: Set environment variables
         run: |
           echo "REPO_LOWER=$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-          echo "PIPLINE_NAME=backend"
-          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/${{ env.REPO_LOWER }}/${{ env.PIPLINE_NAME }}:latest" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]'):latest" >> $GITHUB_ENV
+
       - name: Login to registry
         run: |
           echo ${{ secrets.REGISTRY_TOKEN }} | \
