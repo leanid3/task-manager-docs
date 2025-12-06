@@ -3,7 +3,7 @@ name: Developer CI/CD Pipeline
 
 on:
   push:
-    branches: [main, backend]
+    branches: [master, backend]
 
 jobs:
 
@@ -46,7 +46,7 @@ jobs:
   deploy:
     needs: build-and-push  # Запускается только после успешной сборки
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'  # Деплой только для main ветки
+    if: github.ref == 'refs/heads/master'  # Деплой только для master ветки
     steps:
       - name: Set environment variables
         run: |
