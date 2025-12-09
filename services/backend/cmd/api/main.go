@@ -1,9 +1,14 @@
 package main
 
 import (
+	"app/config"
+	"app/internal/adapter/postgres"
 	"app/internal/handlers"
+	"app/internal/usecase"
+	database "app/pkg/database/connector/sql/postgres"
 	"context"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,7 +17,41 @@ import (
 )
 
 func main() {
-	// Настройка роутера
+
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("failed to load config", "error", err)
+		os.Exit(1)
+	}
+	// Подключение и разрыв соединения с базой данных
+	connector, err := database.NewConnector(cfg.Database.ToPostgresConfig())
+	slog.Info("creating connector", "config", cfg.Database.ToPostgresConfig())
+	if err != nil {
+		slog.Error("failed to create connector", "error", err)
+		os.Exit(1)
+	}
+	defer connector.Close()
+
+	// Инициализация репозиториев
+	taskRepo := postgres.NewTaskPostgresAdapter(connector.Pool())
+	slog.Info("task repo created", "taskRepo", taskRepo)
+
+	// Инициализация сервисов
+	taskService := usecase.NewTaskService(taskRepo)
+	slog.Info("task usecase created", "taskService", taskService)
+
+	// проверка подключения к базе данных
+	if err := connector.HealthCheck(context.Background()); err != nil {
+		slog.Error("failed to check connector health", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("connector health checked successfully")
+
+	// Настройка роутеров
+	//TODO вынести в отдельный файл
+	//TODO добавить валидацию
+	//TODO добавить middleware для логирования запросов
+	//TODO изменить формат request и response
 	mux := http.NewServeMux()
 
 	// Регистрируем handlers
@@ -21,6 +60,7 @@ func main() {
 	mux.HandleFunc("/api/users", handlers.UsersHandler)
 	mux.HandleFunc("/api/users/", handlers.UserByIDHandler)
 
+	//TODO добавить middleware для логирования запросов
 	// Конфигурация сервера
 	port := getEnv("PORT", "8080")
 	server := &http.Server{
@@ -31,6 +71,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	//TODO улучшить graceful shutdown
 	// Graceful shutdown
 	go func() {
 		log.Printf("🚀 Server starting on port %s", port)
@@ -56,6 +97,7 @@ func main() {
 	log.Println("✅ Server exited properly")
 }
 
+// TODO пренести в  слой handler
 // Middleware для логирования запросов
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -65,6 +107,7 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// TODO адаптивровать слой config, убрать этот метод
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

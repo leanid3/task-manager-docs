@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"app/internal/models"
 	"app/pkg/response"
 	"encoding/json"
 	"net/http"
