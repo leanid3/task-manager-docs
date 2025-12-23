@@ -1,33 +1,22 @@
 package postgres
 
 import (
+	"app/pkg/logger"
 	"context"
 	"fmt"
-	"log/slog"
-	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-type Config struct {
-	Host            string
-	Port            int
-	User            string
-	Password        string
-	Database        string
-	MaxConnections  int32
-	MinConnections  int32
-	MaxConnLifetime time.Duration
-	MaxConnIdleTime time.Duration
-}
 
 type Connector struct {
 	pool *pgxpool.Pool
 	cfg  *Config
+	l    logger.Interface
 }
 
-func NewConnector(cfg *Config) (*Connector, error) {
-	slog.Info("creating postgres connector", "config", cfg)
+func NewConnector(cfg *Config, l logger.Interface) (*Connector, error) {
 	connString := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?pool_max_conns=%d&pool_min_conns=%d",
 		cfg.User,
 		cfg.Password,
@@ -37,9 +26,10 @@ func NewConnector(cfg *Config) (*Connector, error) {
 		cfg.MaxConnections,
 		cfg.MinConnections,
 	)
+	l.Info("success - parse connection string", "connString", connString)
 	poolConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		slog.Error("failed to parse connection string", "error", err)
+		l.Error("failed - parse connection string", "error", err)
 		return nil, fmt.Errorf("failed to parse connection string: %w", err)
 	}
 
@@ -51,35 +41,50 @@ func NewConnector(cfg *Config) (*Connector, error) {
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
-		slog.Error("failed to create pool", "error", err)
-		return nil, fmt.Errorf("failed to create pool: %w", err)
+		l.Error("failed - create pool", "error", err)
+		return nil, fmt.Errorf("failed - create pool: %w", err)
 	}
 
 	// Проверяем, что соединение работает
 	if err := pool.Ping(context.Background()); err != nil {
-		slog.Error("failed to ping pool", "error", err)
-		return nil, fmt.Errorf("failed to ping pool: %w", err)
+		l.Error("failed - ping pool", "error", err)
+		return nil, fmt.Errorf("failed - ping pool: %w", err)
 	}
 
-	slog.Info("postgres connector created successfully")
+	l.Info("success - postgres connector created")
 	return &Connector{
 		pool: pool,
 		cfg:  cfg,
+		l:    l,
 	}, nil
 }
 
 func (c *Connector) Close() error {
-	slog.Info("closing postgres connector")
+	c.l.Info("success - closing postgres connector")
 	c.pool.Close()
 	return nil
 }
 
 func (c *Connector) Pool() *pgxpool.Pool {
-	slog.Info("getting postgres pool")
+	c.l.Info("success - getting postgres pool")
 	return c.pool
 }
 
 func (c *Connector) HealthCheck(ctx context.Context) error {
-	slog.Info("checking postgres health")
+	c.l.Info("success - checking postgres health")
 	return c.pool.Ping(ctx)
+}
+
+// TODO доделать методы для работы с БД
+func (c *Connector) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
+	return c.pool.QueryRow(ctx, query, args...)
+}
+
+func (c *Connector) Exec(ctx context.Context, query string, args ...any) (pgconn.CommandTag, error) {
+	return c.pool.Exec(ctx, query, args...)
+}
+
+// Utility для маппинга generic результатов
+func (c *Connector) ScanRow(row pgx.Row, dest ...any) error {
+	return row.Scan(dest...)
 }

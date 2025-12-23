@@ -1,0 +1,168 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: document-flow-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: document_flow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - document-flow-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: document-flow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - document-flow-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: document-flow-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    networks:
+      - document-flow-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: document-flow-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - document-flow-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: document-flow-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/documents --ignore-existing;
+      mc anonymous set download myminio/documents;
+      exit 0;
+      "
+    networks:
+      - document-flow-network
+
+  backend:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+    container_name: document-flow-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      # Переопределяем хосты для подключения к сервисам в Docker сети
+      # Viper автоматически переопределит значения из config.yaml через переменные окружения
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      # Для массива brokers используем формат с индексом (Viper поддерживает BROKER_BROKERS_0 для массивов)
+      BROKER_BROKERS_0: kafka:9092
+      # Альтернативный способ - через строку с разделителями
+      BROKER_BROKERS: kafka:9092
+      MINIO_ENDPOINT: minio:9000
+      LOGGER_APP_PATH: /app/logs/app.log
+      LOGGER_HEALTH_PATH: /app/logs/health.log
+      LOGGER_HTTP_PATH: /app/logs/http.log
+      LOGGER_KAFKA_PATH: /app/logs/kafka.log
+      LOGGER_MINIO_PATH: /app/logs/minio.log
+      LOGGER_TASK_PATH: /app/logs/task.log
+      LOGGER_S3_PATH: /app/logs/s3.log
+    working_dir: /app
+    volumes:
+      - ./services/backend/config.yaml:/app/config.yaml:ro
+      - ./services/backend/logs:/app/logs
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    networks:
+      - document-flow-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  dozzle:
+    image: amir20/dozzle:latest
+    ports:
+      - "8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /service/backend/logs:/logs:ro
+
+  
+  adminer:
+    image: adminer:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 9099:8080
+    networks:
+      - document-flow-network
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  document-flow-network:
+    driver: bridge
+

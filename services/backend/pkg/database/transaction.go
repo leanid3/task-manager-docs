@@ -6,18 +6,21 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TODO нужен рефактринг
 type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgx.CommandTag, error)
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
 var (
 	_ DB = (*pgxpool.Pool)(nil)
 	_ DB = (*pgx.Conn)(nil)
+	_ DB = (pgx.Tx)(nil)
 )
 
 func WithTransaction(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) error) error {
@@ -28,24 +31,28 @@ func WithTransaction(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
+	var fnErr error
 	defer func() {
 		if p := recover(); p != nil {
-			if err := tx.Rollback(ctx); err != nil {
-				slog.Error("failed to rollback transaction", "error", err)
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				slog.Error("failed to rollback transaction", "error", rollbackErr)
 			}
 			panic(p)
-		} else if err != nil {
-			if err := tx.Rollback(ctx); err != nil {
-				slog.Error("failed to rollback transaction", "error", err)
+		} else if fnErr != nil {
+			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
+				slog.Error("failed to rollback transaction", "error", rollbackErr)
 			}
 		} else {
-			err = tx.Commit(ctx)
+			if commitErr := tx.Commit(ctx); commitErr != nil {
+				slog.Error("failed to commit transaction", "error", commitErr)
+				fnErr = fmt.Errorf("failed to commit transaction: %w", commitErr)
+			}
 		}
 	}()
-	err = fn(tx)
-	if err != nil {
-		slog.Error("transaction failed", "error", err)
-		return fmt.Errorf("transaction failed: %w", err)
+	fnErr = fn(tx)
+	if fnErr != nil {
+		slog.Error("transaction failed", "error", fnErr)
+		return fmt.Errorf("transaction failed: %w", fnErr)
 	}
-	return nil
+	return fnErr
 }

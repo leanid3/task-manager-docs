@@ -1,0 +1,90 @@
+logger:
+  level: debug
+  format: json # color, json, text
+  app_path: "/app/logs/app.log"
+  health_path: "/app/logs/health.log"
+  http_path: "/app/logs/http.log"
+  kafka_path: "/app/logs/kafka.log"
+  minio_path: "/app/logs/minio.log"
+  task_path: "/app/logs/task.log"
+  s3_path: "/app/logs/s3.log"
+  max_size: 10        # максимальный размер файла в мегабайтах (0 = без ограничений)
+  max_files: 5        # максимальное количество файлов (0 = без ограничений)
+  clear_on_start: true # очищать ли файл при старте приложения
+  mode: stdout #file, stdout
+
+server:
+  port: 8080
+  host: "0.0.0.0"
+  prefork: false
+  timeout: 30s
+  read_timeout: 10s
+  write_timeout: 10s
+  shutdown_timeout: 5s
+
+database:
+  host: "postgres"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  database: "document_flow"
+  max_connections: 25
+  min_connections: 5
+  max_conn_lifetime: 1h
+  max_conn_idle_time: 30m
+
+broker:
+  bootstrap_service: "kafka:29092"
+  client_id: "task_manager_1_client"
+  topics:
+    - tasks_llm
+    # - tasks_analysis
+  
+
+  # Producer
+  producer_acks: "-1"
+  producer_idempotence: true
+  producer_compression: "snappy"
+  producer_retries: 3
+  producer_batch_size: 16384
+  producer_linger_ms: 10
+  producer_max_flight_requests: 5
+  producer_timeout_ms: 30000
+  
+  # Consumer
+  consumer_group_id: "task_llm_group"
+  consumer_auto_commit: true
+  consumer_commit_interval_ms: 5000
+  consumer_session_timeout_ms: 30000
+  consumer_heartbeat_interval_ms: 10000
+  consumer_max_poll_records: 500
+  
+  # Security #В прод лучше заменить на SASL_PLAINTEXT и указать username и password
+  security_protocol: "PLAINTEXT"
+  sasl_mechanism: ""
+  sasl_username: ""
+  sasl_password: ""
+  
+  # SSL
+  ssl_certificate_verification: false
+
+metrics:
+  enabled: true
+  port: 9090
+  host: "0.0.0.0"
+  path: "/metrics"
+
+minio:
+  endpoint: "minio:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  bucket: "documents"
+  prefix: "uploads"
+  UseSSL: false
+  Region: "us-east-1"
+  Timeout: 30s
+
+swagger:
+  enabled: true
+  path: "/swagger"
+
