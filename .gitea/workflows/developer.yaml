@@ -83,10 +83,10 @@ jobs:
       - name: Create production env file automatically
         run: |
           # Экспортируем все переменные с префиксом TASK_MANAGER_ и убираем префикс
-          env | grep '^TASK_MANAGER_' | sed 's/^TASK_MANAGER_//g' > /tmp/prod.env
+          env | grep '^TASK_MANAGER_' | sed 's/^TASK_MANAGER_//g' > /tmp/prod.env || touch /tmp/prod.env
           
           echo "Generated env file:"
-          cat /tmp/prod.env
+          cat /tmp/prod.env || echo "No environment variables found"
 
       - name: Start container
         run: |
