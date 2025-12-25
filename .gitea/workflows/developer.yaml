@@ -57,64 +57,128 @@ jobs:
         run: |
           docker push ${{ env.IMAGE_TAG }}
           docker push ${{ env.IMAGE_NAME }}
-
   deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
-    steps:
-      - name: Set environment variables
-        run: |
-          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:latest" >> $GITHUB_ENV
+      needs: build-and-push
+      runs-on: ubuntu-latest
+      if: github.ref == 'refs/heads/master'
+      steps:
+        - name: Set environment variables
+          run: |
+            echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:latest" >> $GITHUB_ENV
 
-      - name: Login to registry
-        run: |
-          echo ${{ secrets.REGISTRY_TOKEN }} | \
-          docker login ${{ vars.HOST }}:${{ vars.PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+        - name: Login to registry
+          run: |
+            echo ${{ secrets.REGISTRY_TOKEN }} | \
+            docker login ${{ vars.HOST }}:${{ vars.PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
 
-      - name: Pull latest image
-        run: docker pull ${{ env.IMAGE_NAME }}
+        - name: Pull latest image
+          run: docker pull ${{ env.IMAGE_NAME }}
 
-      - name: Stop old container
-        run: |
-          docker stop task-manager-app || true
-          docker rm task-manager-app || true
+        - name: Stop old container
+          run: |
+            docker stop task-manager-app || true
+            docker rm task-manager-app || true
 
-      - name: Create production env file automatically
-        run: |
-          # Экспортируем все переменные с префиксом TASK_MANAGER_ и убираем префикс
-          env | grep '^TASK_MANAGER_' | sed 's/^TASK_MANAGER_//g' > /tmp/prod.env || touch /tmp/prod.env
-          
-          echo "Generated env file:"
-          cat /tmp/prod.env || echo "No environment variables found"
+        - name: Create production env file
+          run: |
+            cat > /tmp/prod.env << 'EOF'
+            LOGGER_LEVEL=${{ vars.TASK_MANAGER_LOGGER_LEVEL }}
+            LOGGER_FORMAT=${{ vars.TASK_MANAGER_LOGGER_FORMAT }}
+            LOGGER_MODE=${{ vars.TASK_MANAGER_LOGGER_MODE }}
+            LOGGER_CLEAR_ON_START=${{ vars.TASK_MANAGER_LOGGER_CLEAR_ON_START }}
+            LOGGER_APP_PATH=/app/logs/app.log
+            LOGGER_HEALTH_PATH=/app/logs/health.log
+            LOGGER_HTTP_PATH=/app/logs/http.log
+            LOGGER_KAFKA_PATH=/app/logs/kafka.log
+            LOGGER_MINIO_PATH=/app/logs/minio.log
+            LOGGER_TASK_PATH=/app/logs/task.log
+            LOGGER_S3_PATH=/app/logs/s3.log
+            LOGGER_MAX_SIZE=10
+            LOGGER_MAX_FILES=5
+            SERVER_PORT=${{ vars.TASK_MANAGER_SERVER_PORT }}
+            SERVER_HOST=0.0.0.0
+            SERVER_PREFORK=false
+            SERVER_TIMEOUT=${{ vars.TASK_MANAGER_SERVER_TIMEOUT }}
+            SERVER_READ_TIMEOUT=${{ vars.TASK_MANAGER_SERVER_READ_TIMEOUT }}
+            SERVER_WRITE_TIMEOUT=10s
+            SERVER_SHUTDOWN_TIMEOUT=5s
+            DATABASE_HOST=${{ vars.TASK_MANAGER_DATABASE_HOST }}
+            DATABASE_PORT=${{ vars.TASK_MANAGER_DATABASE_PORT }}
+            DATABASE_USER=${{ vars.TASK_MANAGER_DATABASE_USER }}
+            DATABASE_PASSWORD=${{ secrets.TASK_MANAGER_DATABASE_PASSWORD }}
+            DATABASE_DATABASE=${{ vars.TASK_MANAGER_DATABASE_DATABASE }}
+            DATABASE_MAX_CONNECTIONS=${{ vars.TASK_MANAGER_DATABASE_MAX_CONNECTIONS }}
+            DATABASE_MIN_CONNECTIONS=${{ vars.TASK_MANAGER_DATABASE_MIN_CONNECTIONS }}
+            DATABASE_MAX_CONN_LIFETIME=${{ vars.TASK_MANAGER_DATABASE_MAX_CONN_LIFETIME }}
+            DATABASE_MAX_CONN_IDLE_TIME=${{ vars.TASK_MANAGER_DATABASE_MAX_CONN_IDLE_TIME }}
+            BROKER_BOOTSTRAP_SERVICE=${{ vars.TASK_MANAGER_BROKER_BOOTSTRAP_SERVICE }}
+            BROKER_CLIENT_ID=${{ vars.TASK_MANAGER_BROKER_CLIENT_ID }}
+            BROKER_TOPICS=${{ vars.TASK_MANAGER_BROKER_TOPICS }}
+            BROKER_PRODUCER_ACKS=${{ vars.TASK_MANAGER_BROKER_PRODUCER_ACKS }}
+            BROKER_PRODUCER_IDEMPOTENCE=${{ vars.TASK_MANAGER_BROKER_PRODUCER_IDEMPOTENCE }}
+            BROKER_PRODUCER_COMPRESSION=${{ vars.TASK_MANAGER_BROKER_PRODUCER_COMPRESSION }}
+            BROKER_PRODUCER_RETRIES=${{ vars.TASK_MANAGER_BROKER_PRODUCER_RETRIES }}
+            BROKER_PRODUCER_BATCH_SIZE=16384
+            BROKER_PRODUCER_LINGER_MS=10
+            BROKER_PRODUCER_MAX_FLIGHT_REQUESTS=5
+            BROKER_PRODUCER_TIMEOUT_MS=30000
+            BROKER_CONSUMER_GROUP_ID=${{ vars.TASK_MANAGER_BROKER_CONSUMER_GROUP_ID }}
+            BROKER_CONSUMER_AUTO_COMMIT=${{ vars.TASK_MANAGER_BROKER_CONSUMER_AUTO_COMMIT }}
+            BROKER_CONSUMER_COMMIT_INTERVAL_MS=${{ vars.TASK_MANAGER_BROKER_CONSUMER_COMMIT_INTERVAL_MS }}
+            BROKER_CONSUMER_SESSION_TIMEOUT_MS=${{ vars.TASK_MANAGER_BROKER_CONSUMER_SESSION_TIMEOUT_MS }}
+            BROKER_CONSUMER_HEARTBEAT_INTERVAL_MS=${{ vars.TASK_MANAGER_BROKER_CONSUMER_HEARTBEAT_INTERVAL_MS }}
+            BROKER_CONSUMER_MAX_POLL_RECORDS=${{ vars.TASK_MANAGER_BROKER_CONSUMER_MAX_POLL_RECORDS }}
+            BROKER_SECURITY_PROTOCOL=${{ vars.TASK_MANAGER_BROKER_SECURITY_PROTOCOL }}
+            BROKER_SASL_MECHANISM=
+            BROKER_SASL_USERNAME=${{ secrets.TASK_MANAGER_BROKER_SASL_USERNAME }}
+            BROKER_SASL_PASSWORD=${{ secrets.TASK_MANAGER_BROKER_SASL_PASSWORD }}
+            BROKER_SSL_CERTIFICATE_VERIFICATION=false
+            METRICS_ENABLED=true
+            METRICS_PORT=9090
+            METRICS_HOST=0.0.0.0
+            METRICS_PATH=/metrics
+            MINIO_ENDPOINT=${{ vars.TASK_MANAGER_MINIO_ENDPOINT }}
+            MINIO_ACCESS_KEY=${{ secrets.TASK_MANAGER_MINIO_ACCESS_KEY }}
+            MINIO_SECRET_KEY=${{ secrets.TASK_MANAGER_MINIO_SECRET_KEY }}
+            MINIO_BUCKET=${{ vars.TASK_MANAGER_MINIO_BUCKET }}
+            MINIO_PREFIX=uploads
+            MINIO_USESSL=${{ vars.TASK_MANAGER_MINIO_USESSL }}
+            MINIO_REGION=${{ vars.TASK_MANAGER_MINIO_REGION }}
+            MINIO_TIMEOUT=${{ vars.TASK_MANAGER_MINIO_TIMEOUT }}
+            SWAGGER_ENABLED=${{ vars.TASK_MANAGER_SWAGGER_ENABLED }}
+            SWAGGER_PATH=${{ vars.TASK_MANAGER_SWAGGER_PATH }}
+            EOF
+            
+            echo "✅ Generated env file:"
+            cat /tmp/prod.env
 
-      - name: Start container
-        run: |
-          docker run -d \
-            --name task-manager-app \
-            --restart unless-stopped \
-            -p ${{ vars.TASK_MANAGER_HTTP_PORT }}:8080 \
-            -p ${{ vars.TASK_MANAGER_METRICS_PORT }}:9090 \
-            --env-file /tmp/prod.env \
-            -v /var/log/task-manager:/app/logs \
-            --network document-flow-network \
-            ${{ env.IMAGE_NAME }}
-          rm -f /tmp/prod.env
+        - name: Start container
+          run: |
+            docker run -d \
+              --name task-manager-app \
+              --restart unless-stopped \
+              -p ${{ vars.TASK_MANAGER_HTTP_PORT }}:8080 \
+              -p ${{ vars.TASK_MANAGER_METRICS_PORT }}:9090 \
+              --env-file /tmp/prod.env \
+              -v /var/log/task-manager:/app/logs \
+              --network document-flow-network \
+              ${{ env.IMAGE_NAME }}
+            rm -f /tmp/prod.env
 
-      - name: Health check
-        run: |
-          echo "⏳ Waiting for service..."
-          sleep 10
-          
-          for i in {1..30}; do
-            if curl -f http://${{ vars.HOST }}:${{ vars.TASK_MANAGER_HTTP_PORT }}/health/; then
-              echo "✅ Deployment successful!"
-              exit 0
-            fi
-            echo "Attempt $i/30 failed, retrying..."
-            sleep 5
-          done
-          
-          echo "❌ Health check failed"
-          docker logs task-manager-app --tail 50
-          exit 1
+        - name: Health check
+          run: |
+            echo "⏳ Waiting for service..."
+            sleep 10
+            
+            for i in {1..30}; do
+              if curl -f http://${{ vars.HOST }}:${{ vars.TASK_MANAGER_HTTP_PORT }}/health/; then
+                echo "✅ Deployment successful!"
+                exit 0
+              fi
+              echo "Attempt $i/30 failed, retrying..."
+              sleep 5
+            done
+            
+            echo "❌ Health check failed"
+            docker logs task-manager-app --tail 50
+            exit 1
