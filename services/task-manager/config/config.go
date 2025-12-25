@@ -27,14 +27,14 @@ type BrokerConfig struct {
 	Topics           []string `mapstructure:"topics"`
 
 	// Producer настройки
-	ProducerAcks                       string `mapstructure:"producer_acks" validate:"oneof=-1 all 0 1"`
-	ProducerEnableIdempotence          bool   `mapstructure:"producer_idempotence"`
-	ProducerCompressionType            string `mapstructure:"producer_compression" validate:"oneof=snappy gzip lz4 zstd none"`
-	ProducerRetries                    int    `mapstructure:"producer_retries"`
-	ProducerBatchSize                  int    `mapstructure:"producer_batch_size"`
-	ProducerLingerMs                   int    `mapstructure:"producer_linger_ms"`
-	ProducerMaxInFlightRequestsPerConn int    `mapstructure:"producer_max_flight_requests"`
-	ProducerRequestTimeoutMs           int    `mapstructure:"producer_timeout_ms"`
+	ProducerAcks              string `mapstructure:"producer_acks" validate:"oneof=-1 all 0 1"`
+	ProducerEnableIdempotence bool   `mapstructure:"producer_idempotence"`
+	ProducerCompressionType   string `mapstructure:"producer_compression" validate:"oneof=snappy gzip lz4 zstd none"`
+	ProducerRetries           int    `mapstructure:"producer_retries"`
+	// ProducerBatchSize                  int    `mapstructure:"producer_batch_size"`
+	// ProducerLingerMs                   int    `mapstructure:"producer_linger_ms"`
+	// ProducerMaxInFlightRequestsPerConn int    `mapstructure:"producer_max_flight_requests"`
+	// ProducerRequestTimeoutMs           int    `mapstructure:"producer_timeout_ms"`
 
 	// Consumer настройки
 	ConsumerGroupID              string `mapstructure:"consumer_group_id"`
@@ -42,7 +42,7 @@ type BrokerConfig struct {
 	ConsumerAutoCommitIntervalMs int    `mapstructure:"consumer_commit_interval_ms"`
 	ConsumerSessionTimeoutMs     int    `mapstructure:"consumer_session_timeout_ms"`
 	ConsumerHeartbeatIntervalMs  int    `mapstructure:"consumer_heartbeat_interval_ms"`
-	ConsumerMaxPollRecords       int    `mapstructure:"consumer_max_poll_records"`
+	// ConsumerMaxPollRecords       int    `mapstructure:"consumer_max_poll_records"`
 
 	// Безопасность (общая)
 	SecurityProtocol string `mapstructure:"security_protocol" validate:"oneof=PLAINTEXT SASL_SSL SASL_PLAINTEXT SSL"`

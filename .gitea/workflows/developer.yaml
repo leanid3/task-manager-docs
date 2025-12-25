@@ -80,27 +80,26 @@ jobs:
           docker stop task-manager-app || true
           docker rm task-manager-app || true
 
-      - name: Start new container
+      - name: Create production env file automatically
+        run: |
+          # Экспортируем все переменные с префиксом TASK_MANAGER_ и убираем префикс
+          env | grep '^TASK_MANAGER_' | sed 's/^TASK_MANAGER_//g' > /tmp/prod.env
+          
+          echo "Generated env file:"
+          cat /tmp/prod.env
+
+      - name: Start container
         run: |
           docker run -d \
             --name task-manager-app \
             --restart unless-stopped \
             -p ${{ vars.TASK_MANAGER_HTTP_PORT }}:8080 \
             -p ${{ vars.TASK_MANAGER_METRICS_PORT }}:9090 \
-            -e HTTP_PORT=8080 \
-            -e METRICS_PORT=9090 \
-            -e ENVIRONMENT=production \
-            -e DB_HOST=${{ secrets.DB_HOST }} \
-            -e DB_PORT=${{ secrets.DB_PORT }} \
-            -e DB_USER=${{ secrets.DB_USER }} \
-            -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
-            -e DB_NAME=${{ secrets.DB_NAME }} \
-            -e KAFKA_BROKERS=${{ secrets.KAFKA_BROKERS }} \
-            -e MINIO_ENDPOINT=${{ secrets.MINIO_ENDPOINT }} \
-            -e MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }} \
-            -e MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }} \
+            --env-file /tmp/prod.env \
+            -v /var/log/task-manager:/app/logs \
             --network document-flow-network \
             ${{ env.IMAGE_NAME }}
+          rm -f /tmp/prod.env
 
       - name: Health check
         run: |
