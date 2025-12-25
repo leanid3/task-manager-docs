@@ -1,0 +1,247 @@
+services:
+  postgres-task-manager:
+    build:
+      context: ./database/task-manager/postgres
+    container_name: document-flow-postgres-task-manager
+    environment:
+      POSTGRES_USER: postgres #TODO: заменить на переменную окружения
+      POSTGRES_PASSWORD: postgres #TODO: заменить на переменную окружения
+      POSTGRES_DB: task_manager #TODO: заменить на переменную окружения
+    ports:
+      - "5443:5432" #TODO: заменить на переменную окружения
+    volumes:
+      - postgres_task-manager_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"] #TODO: заменить на переменную окружения
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - document-flow-network
+    restart: unless-stopped
+    
+  postgres-llm-worker:
+    image: postgres:16
+    container_name: document-flow-postgres-llm-worker
+    environment:
+      POSTGRES_USER: postgres #TODO: заменить на переменную окружения
+      POSTGRES_PASSWORD: postgres #TODO: заменить на переменную окружения
+      POSTGRES_DB: llm_worker #TODO: заменить на переменную окружения
+    ports:
+      - "5444:5432" #TODO: заменить на переменную окружения
+    volumes:
+      - postgres_llm-worker_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"] #TODO: заменить на переменную окружения
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - document-flow-network
+    restart: unless-stopped
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: document-flow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181 #TODO: заменить на переменную окружения
+      ZOOKEEPER_TICK_TIME: 2000 #TODO: заменить на переменную окружения
+    networks:
+      - document-flow-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: document-flow-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1 #TODO: заменить на переменную окружения
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181 
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT #TODO: заменить на переменную окружения
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL #TODO: заменить на переменную окружения
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1 #TODO: заменить на переменную окружения
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true" #TODO: заменить на переменную окружения
+    ports:
+      - "9092:9092" #TODO: заменить на переменную окружения
+    networks:
+      - document-flow-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+
+  # kafka-init:
+  #   image: confluentinc/cp-kafka:7.5.0
+  #   container_name: document-flow-kafka-init
+  #   depends_on: [kafka]
+  #   entrypoint: >
+  #     /bin/sh -c "
+  #     kafka-topics --create --topic tasks_pending --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092;
+  #     kafka-topics --create --topic tasks_processing --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092;
+  #     kafka-topics --create --topic tasks_completed --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092;
+  #     kafka-topics --create --topic tasks_failed --partitions 3 --replication-factor 1 --bootstrap-server localhost:9092;
+  #     exit 0;
+  #     "
+  #   networks:
+  #     - kafka-network
+  #   restart: "no"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: document-flow-kafka-ui
+    ports:
+      - "9100:8080" #TODO: заменить на переменную окружения
+    environment:
+      KAFKA_CLUSTERS_0_NAME: document-flow #TODO: заменить на переменную окружения
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092 #TODO: заменить на переменную окружения
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181 #TODO: заменить на переменную окружения
+    networks:
+      - document-flow-network
+
+  minio:
+    image: minio/minio:latest
+    container_name: document-flow-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin #TODO: заменить на переменную окружения
+      MINIO_ROOT_PASSWORD: minioadmin #TODO: заменить на переменную окружения
+    ports:
+      - "9000:9000" #TODO: заменить на переменную окружения
+      - "9001:9001" #TODO: заменить на переменную окружения
+    volumes:
+      - minio_data:/data
+    networks:
+      - document-flow-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: document-flow-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin; #TODO: заменить на переменную окружения
+      mc mb myminio/documents --ignore-existing;
+      mc anonymous set download myminio/documents;
+      exit 0;
+      "
+    networks:
+      - document-flow-network
+    restart: "no"
+
+  task-manager:
+    build:
+      context: ./services/task-manager
+    container_name: document-flow-task-manager
+    depends_on:
+      postgres-task-manager:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      task-manager-migrate:
+        condition: service_completed_successfully
+    # environment:
+      # Переопределяем хосты для подключения к сервисам в Docker сети
+      # Viper автоматически переопределит значения из config.yaml через переменные окружения
+      # DATABASE_HOST: postgres
+      # DATABASE_PORT: 5432
+      # # Альтернативный способ - через строку с разделителями
+      # MINIO_ENDPOINT: minio:9000
+      # LOGGER_APP_PATH: /app/logs/app.log
+      # LOGGER_HEALTH_PATH: /app/logs/health.log
+      # LOGGER_HTTP_PATH: /app/logs/http.log
+      # LOGGER_KAFKA_PATH: /app/logs/kafka.log
+      # LOGGER_MINIO_PATH: /app/logs/minio.log
+      # LOGGER_TASK_PATH: /app/logs/task.log
+      # LOGGER_S3_PATH: /app/logs/s3.log
+      # BROKER_BOOTSTRAP_SERVICE: kafka:29092
+    working_dir: /app
+    # extra_hosts:
+    #   - "kafka:host.docker.internal"
+    volumes:
+      - ./services/task-manager/config.yaml:/app/config.yaml:ro #TODO! убрать на проде
+      - ./services/task-manager/logs:/app/logs #TODO! убрать на проде
+    ports:
+      - "8080:8080" #TODO: заменить на переменную окружения
+      - "9090:9090" #TODO: заменить на переменную окружения
+    networks:
+      - document-flow-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+#TODO! убрать на проде
+  dozzle:
+    image: amir20/dozzle:latest
+    ports:
+      - "8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /service/task-manager/logs:/logs:ro
+
+  
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    ports:
+      - 9099:8080
+    networks:
+      - document-flow-network
+
+
+#миграция для task-manager
+  task-manager-migrate:
+    image: migrate/migrate:latest
+    container_name: task-manager-migrate
+    depends_on:
+      postgres-task-manager:
+        condition: service_healthy
+    volumes:
+      - ./database/task-manager/migrations:/migrations
+    user: "1000:1000"
+    networks:
+      - document-flow-network
+    restart: "no"
+
+
+volumes:
+  minio_data:
+  postgres_task-manager_data:
+  postgres_llm-worker_data:
+
+networks:
+  document-flow-network:
+    driver: bridge
+
+
