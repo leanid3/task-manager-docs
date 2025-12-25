@@ -139,7 +139,7 @@ services:
     build:
       context: ./services/task-manager
       dockerfile: Dockerfile
-      target: dev #окружения dev/prod
+      target: prod #окружения dev/prod
     container_name: document-flow-task-manager
     depends_on:
       postgres-task-manager:
@@ -155,8 +155,8 @@ services:
     env_file:
       - ./env/task-manager.env
     working_dir: /app
-    volumes:
-      - ./services/task-manager/logs:/app/logs
+    # volumes:
+    #   - ./services/task-manager/logs:/app/logs
     ports:
       - "${TASK_MANAGER_HTTP_PORT}:8080"
       - "${TASK_MANAGER_METRICS_PORT}:9090"
@@ -234,4 +234,5 @@ volumes:
 
 networks:
   document-flow-network:
+    name: document-flow-network
     driver: bridge
