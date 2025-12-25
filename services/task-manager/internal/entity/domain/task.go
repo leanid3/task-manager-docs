@@ -16,6 +16,7 @@ const (
 	TaskStatusProcessing TaskStatus = "PROCESSING"
 	TaskStatusCompleted  TaskStatus = "COMPLETED"
 	TaskStatusFailed     TaskStatus = "FAILED"
+	TaskStatusCancelled  TaskStatus = "CANCELLED"
 )
 
 // type TaskType string
@@ -55,6 +56,8 @@ func (t *Task) ToDatabaseCode() string {
 		return "COMPLETED"
 	case TaskStatusFailed:
 		return "FAILED"
+	case TaskStatusCancelled:
+		return "CANCELLED"
 	}
 	return ""
 }
@@ -70,6 +73,8 @@ func (s TaskStatus) ToKafkaCode() int {
 		return 3
 	case TaskStatusFailed:
 		return 4
+	case TaskStatusCancelled:
+		return 5
 	default:
 		return 4
 	}
@@ -86,6 +91,8 @@ func (s TaskStatus) FromKafkaCode(code int) (TaskStatus, bool) {
 		return TaskStatusCompleted, true
 	case 4:
 		return TaskStatusFailed, true
+	case 5:
+		return TaskStatusCancelled, true
 	default:
 		return TaskStatusFailed, false
 	}

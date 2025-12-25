@@ -14,4 +14,5 @@ type LLMMetadata struct {
 	Filename    string `json:"filename,omitempty"`
 	Filesize    int64  `json:"filesize,omitempty"`
 	ContentType string `json:"content_type,omitempty"`
+	StoragePath string `json:"storage_path,omitempty"`
 }

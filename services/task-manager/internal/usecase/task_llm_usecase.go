@@ -49,7 +49,6 @@ func (uc *TaskLLMUC) CreateTask(
 	filesize int64,
 	requestID string,
 ) (uuid.UUID, error) {
-	// Валидация входа — без логов, просто корректные ошибки для handler'а
 	if reader == nil {
 		return uuid.Nil, apperrors.New(
 			apperrors.CodeValidationFailed,
@@ -73,11 +72,13 @@ func (uc *TaskLLMUC) CreateTask(
 	taskID := uuid.New()
 	storagePath := uc.storageRepo.GenerateStoragePath(taskID, filename)
 
+	// Преобразуем сохранение metadataдля в Task.Metadata
 	llmMetadata := domain.LLMMetadata{
 		Filename:    filename,
 		ContentType: domain.ContentTypeProtocol,
+		Filesize:    filesize,
+		StoragePath: storagePath,
 	}
-	// Преобразуем LLMMetadata в map[string]interface{} для сохранения в Task.Metadata
 	metadataJSON, err := json.Marshal(llmMetadata)
 	if err != nil {
 		return uuid.Nil, apperrors.Wrap(
@@ -270,7 +271,12 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 			return apperrors.New(apperrors.CodeTaskAlreadyFailed, "task already failed")
 		}
 		return uc.taskRepo.UpdateWithError(ctx, evt.Key.TaskID, domain.TaskStatusFailed, evt.Value.ErrorMessage)
+	case domain.TaskStatusPending:
+		return nil
+	case domain.TaskStatusCancelled:
+		return nil
 	default:
+		uc.l.Error("unknown task status", "status", taskStatus)
 		return apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
 	}
 }

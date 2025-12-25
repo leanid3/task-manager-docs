@@ -9,9 +9,9 @@ import (
 // TaskContractHeaders заголовки для задачи
 type TaskContractHeaders struct {
 	TraceID  *uuid.UUID `json:"trace_id"`
-	WorkerID string     `json:"worker_id,omitempty"`
+	WorkerID string     `json:"worker_id,omitempty"` //необязательно
 	Status   int        `json:"status"`
-	Version  string     `json:"version,omitempty"`
+	Version  string     `json:"version,omitempty"` //необязательно
 }
 
 func (t *TaskContractHeaders) ToMap() map[string]string {

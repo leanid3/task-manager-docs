@@ -20,6 +20,8 @@ services:
     <<: *postgres-common
     build:
       context: ./database/task-manager/postgres
+      args:
+        POSTGRES_DB: ${POSTGRES_TASK_MANAGER_DB} 
     container_name: document-flow-postgres-task-manager
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -83,9 +85,9 @@ services:
       test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:${KAFKA_EXTERNAL_PORT}"]
     restart: unless-stopped
 
-  kafka-ui:
+  ui-kafka:
     image: provectuslabs/kafka-ui:latest
-    container_name: document-flow-kafka-ui
+    container_name: document-flow-ui-kafka
     ports:
       - "${KAFKA_UI_PORT}:8080"
     environment:
@@ -137,7 +139,7 @@ services:
     build:
       context: ./services/task-manager
       dockerfile: Dockerfile
-      target: dev
+      target: dev #окружения dev/prod
     container_name: document-flow-task-manager
     depends_on:
       postgres-task-manager:
@@ -172,9 +174,9 @@ services:
       timeout: 5s
       retries: 5
 
-  dozzle:
+  ui-container:
     image: amir20/dozzle:latest
-    container_name: document-flow-dozzle
+    container_name: document-flow-ui-container
     ports:
       - "${DOZZLE_PORT}:8080"
     volumes:
@@ -183,9 +185,9 @@ services:
     networks:
       - document-flow-network
 
-  adminer:
+  ui-database:
     image: adminer:latest
-    container_name: document-flow-adminer
+    container_name: document-flow-ui-database
     ports:
       - "${ADMINER_PORT}:8080"
     networks:
@@ -197,12 +199,30 @@ services:
     depends_on:
       postgres-task-manager:
         condition: service_healthy
+    user: "1000:1000"
     command: 
       - "-path=/migrations"
       - "-database=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-task-manager:5432/${POSTGRES_TASK_MANAGER_DB}?sslmode=disable"
       - "up"
     volumes:
       - ./database/task-manager/migrations:/migrations
+    networks:
+      - document-flow-network
+    restart: "no"
+
+  llm-worker-migrate:
+    image: migrate/migrate:latest
+    container_name: llm-worker-migrate
+    depends_on:
+      postgres-llm-worker:
+        condition: service_healthy
+    user: "1000:1000"
+    command: 
+      - "-path=/migrations"
+      - "-database=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-llm-worker:5432/${POSTGRES_LLM_WORKER_DB}?sslmode=disable"
+      - "up"
+    volumes:
+      - ./database/llm-worker/migrations:/migrations
     networks:
       - document-flow-network
     restart: "no"
