@@ -3,7 +3,7 @@ name: Task Manager CI/CD Pipeline
 
 on:
   push:
-    branches: [master, task-manager]
+    branches: [task-manager]
 
 jobs:
   build-and-push:
