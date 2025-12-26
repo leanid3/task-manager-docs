@@ -3,7 +3,7 @@ name: Task Manager CI/CD Pipeline
 
 on:
   push:
-    branches: [master, backend]
+    branches: [master, task-manager]
 
 jobs:
   build-and-push:
@@ -20,8 +20,6 @@ jobs:
           echo "📂 Repository structure:"
           ls -la
           echo ""
-          echo "📂 Services directory:"
-          ls -la services/ || echo "services directory not found"
 
       - name: Set environment variables
         run: |
@@ -35,12 +33,10 @@ jobs:
 
       - name: Run tests
         run: |
-          cd services/task-manager
           go test ./...
 
       - name: Build production image
         run: |
-          cd services/task-manager
           docker build \
             --target prod \
             --build-arg HTTP_PORT=8080 \
