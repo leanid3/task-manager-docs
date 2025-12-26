@@ -1,4 +1,4 @@
-service := llm-worker
+service := task-manager
 DB_NAME := llm_worker
 DB_USER := postgres
 DB_PASSWORD := postgres
@@ -11,7 +11,7 @@ migrate_files := database/${service}/migrations/$(version)_*.up.sql database/${s
 
 ##snipers:
 mh: make migrate-help 
-mc: make migrate-create
+mc: make migrate-create 
 md: make migrate-delete
 mu: make migrate-up
 md: make migrate-down
@@ -20,17 +20,22 @@ mv: make migrate-version
 mf: make migrate-force
 
 migrate-help:
-	@echo "Usage: make migrate-create name=<название_версии> version=<номер_версии>"
-	@echo "Usage: make migrate-delete version=<номер_версии>"
-	@echo "Usage: make migrate-up"
-	@echo "Usage: make migrate-down"
-	@echo "Usage: make migrate-status"
-	@echo "Usage: make migrate-version"
-	@echo "Usage: make migrate-force version=<номер_версии>"
-	@echo "Usage: make db-psql query=<запрос>"
+	@echo "Usage: make migrate-create service=<service_name> name=<migration_name>" - создание новой миграции
+	@echo "Usage: make migrate-delete version=<номер_версии>" - удаление миграции по версии
+	@echo "Usage: make migrate-up" - выполнение миграции всех версий
+	@echo "Usage: make migrate-down" - откатить миграцию до прошлой версии
+	@echo "Usage: make migrate-status" - узнать статус миграций
+	@echo "Usage: make migrate-version" - узнать версию миграции
+	@echo "Usage: make migrate-force version=<номер_версии>" - принудительно установить весрию миграции
+	@echo "Usage: make db-psql query=<запрос>" - прямой доступ к бд
 ##Миграции
 migrate-create:
-	docker-compose run --rm ${service}-migrate create -ext sql -dir $(migrate_dir) -seq $(name)
+		@if [ -z "$(name)" ]; then \
+		echo "Usage: make migrate-create service=<service_name> name=<migration_name>"; \
+		exit 1; \
+	fi
+	docker-compose run --rm $(service)-migrate \
+		create -ext sql -dir $(migrate_dir) -seq $(name)
 
 migrate-delete:
 	@if [ -z "$(version)" ]; then \
@@ -43,8 +48,6 @@ migrate-delete:
 		echo "Файлы миграции версии $(version) не найдены"; \
 		exit 1; \
 	fi
-	@echo "Удаление файлов миграции версии $(version)..."
-	@echo "--------------------------------"
 	@rm -f $(migrate_files)
 	@echo "Файлы миграции $(version) удалены"
 
@@ -54,15 +57,16 @@ migrate-up:
 migrate-down:
 	docker-compose run --rm ${service}-migrate -path $(migrate_dir) -database $(database) down
 
-migrate-status:
-	docker-compose run --rm ${service}-migrate -path $(migrate_dir) -database $(database) version
-
-migrate-version:
-	docker-compose run --rm ${service}-migrate -path $(migrate_dir) -database $(database) version
 
 migrate-force:
 	docker-compose run --rm ${service}-migrate -path $(migrate_dir) -database $(database) force $(version)
 
+
+## Получить информацию о миграциях
+migrate-status:
+	docker-compose run --rm ${service}-migrate -path $(migrate_dir) -database $(database) version
+migrate-version:
+	docker-compose run --rm ${service}-migrate -path $(migrate_dir) -database $(database) version
 
 
 ##Прямой доступ к бд
