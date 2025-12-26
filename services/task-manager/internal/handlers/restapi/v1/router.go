@@ -22,8 +22,4 @@ func NewV1Routes(group *gin.RouterGroup, uc usecase.UseCases, cfg *config.Config
 		tasks.POST("/:filename", r.createTask)
 		tasks.GET("/:task_id", r.getTaskByID)
 	}
-	health := group.Group("/health")
-	{
-		health.GET("/", r.health)
-	}
 }

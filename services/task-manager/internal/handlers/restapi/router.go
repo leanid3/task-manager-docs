@@ -6,6 +6,8 @@ import (
 	v1 "app/internal/handlers/restapi/v1"
 	"app/internal/usecase"
 	"app/pkg/logger"
+	"app/pkg/response"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -25,22 +27,21 @@ func NewRoutes(engine *gin.Engine, cfg *config.Config, uc usecase.UseCases, l lo
 	engine.Use(middleware.Recovery(l))
 	// engine.Use(middelware.CORS())
 
-	// Health check
-	// health := engine.Group("/health")
-	// {
-	// 	health.GET("/live", func(c *gin.Context) {
-	// 		c.JSON(http.StatusOK, gin.H{"status": "alive"})
-	// 	})
-	// 	health.GET("/ready", func(c *gin.Context) {
-	// 		// check database, broker, storage
-	// 		//TODO определить response, что это за сущность
-	// 		if err := uc.TaskUC.CheckHealth(c.Request.Context()); err != nil {
-	// 			c.JSON(http.StatusServiceUnavailable, response.Error(err.Error()))
-	// 			return
-	// 		}
-	// 		c.JSON(http.StatusOK, response.Success("ready"))
-	// 	})
-	// }
+	// @Summary Live check
+	// @Description Live check
+	// @Tags health
+	// @Produce json
+	// @Success 200 {object} response.SuccessResponse "Live"
+	// @Router /api/v1/health/live [get]
+	health := engine.Group("/health")
+	{
+		health.GET("/live", func(c *gin.Context) {
+			c.JSON(http.StatusOK, response.Success(map[string]string{"status": "live"}, c.GetString("request_id")))
+		})
+		health.GET("/ready", func(c *gin.Context) {
+			c.JSON(http.StatusOK, response.Success(map[string]string{"status": "ready"}, c.GetString("request_id")))
+		})
+	}
 
 	//Metrics(recommended by Prometheus)
 	// if cfg.Metrics.Enabled {

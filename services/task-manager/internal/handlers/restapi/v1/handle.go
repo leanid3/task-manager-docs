@@ -143,14 +143,3 @@ func (r *V1) getTaskByID(c *gin.Context) {
 		ErrorMessage: task.ErrorMessage,
 	}, requestID))
 }
-
-// @Summary Health check
-// @Description Health check
-// @Tags health
-// @Produce json
-// @Success 200 {object} response.SuccessResponse "Healthy"
-// @Router /api/v1/health [get]
-func (r *V1) health(c *gin.Context) {
-	requestID := c.GetString("request_id")
-	c.JSON(http.StatusOK, response.Success(map[string]string{"status": "healthy"}, requestID))
-}

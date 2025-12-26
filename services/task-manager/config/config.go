@@ -116,7 +116,5 @@ func Load() (*Config, error) {
 		slog.Info("Config loaded from file and environment variables")
 	}
 
-	slog.Info("CONFIG: ", "cfg", cfg)
-
 	return &cfg, nil
 }

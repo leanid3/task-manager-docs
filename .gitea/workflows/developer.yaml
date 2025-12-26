@@ -171,7 +171,7 @@ jobs:
             sleep 10
             
             for i in {1..30}; do
-              if curl -f http://${{ vars.HOST }}:${{ vars.TASK_MANAGER_HTTP_PORT }}/health/; then
+              if curl -f http://${{ vars.HOST }}:${{ vars.TASK_MANAGER_HTTP_PORT }}/health//live; then
                 echo "✅ Deployment successful!"
                 exit 0
               fi
