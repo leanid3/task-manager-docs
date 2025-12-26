@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"testing"
 
 	pkgminio "app/pkg/minio"
 
@@ -141,4 +142,8 @@ func (m *TaskLLMUC) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task
 func (m *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
 	args := m.Called(ctx, evt)
 	return args.Error(0)
+}
+
+func NewMockTaskLLMUC(t *testing.T) *TaskLLMUC {
+	return new(TaskLLMUC)
 }

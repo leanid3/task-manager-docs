@@ -161,7 +161,7 @@ func TestConsumerErrorHandling(t *testing.T) {
 		return errors.New("handler error")
 	}
 
-	cons, err := NewConsumer(errorHandler, []string{testTopic}, cfg, &mockLogger)
+	cons, err := NewConsumer(errorHandler, []string{testTopic}, cfg, mockLogger)
 	require.NoError(t, err)
 	defer func() {
 		cancel()
@@ -240,7 +240,7 @@ func TestConsumerCommitBatch(t *testing.T) {
 		HeartbeatIntervalMs:  3000,
 		AutoOffsetReset:      "earliest", // Читаем с начала топика для тестов
 	}
-	cons, err := NewConsumer(commitHandler, []string{testTopic}, cfg, &mockLogger)
+	cons, err := NewConsumer(commitHandler, []string{testTopic}, cfg, mockLogger)
 	require.NoError(t, err)
 	defer func() {
 		cancel()
@@ -388,7 +388,7 @@ func TestConsumerInterfaceHandlerWithContext(t *testing.T) {
 		HeartbeatIntervalMs:  3000,
 		AutoOffsetReset:      "earliest", // Читаем с начала топика для тестов
 	}
-	cons, err := NewConsumerWithHandler(ctx, ctxHandler, []string{testTopic}, consumerConfig, &mockLogger)
+	cons, err := NewConsumerWithHandler(ctx, ctxHandler, []string{testTopic}, consumerConfig, mockLogger)
 	require.NoError(t, err)
 	defer func() {
 		cancel()
@@ -557,7 +557,7 @@ func TestConsumerRealKafka(t *testing.T) {
 		return nil
 	}
 
-	cons, err := NewConsumer(handler, []string{testTopic}, consumerCfg, &mockLogger)
+	cons, err := NewConsumer(handler, []string{testTopic}, consumerCfg, mockLogger)
 	require.NoError(t, err, "Failed to create consumer")
 	defer cons.Stop()
 

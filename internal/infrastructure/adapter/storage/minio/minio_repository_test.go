@@ -3,7 +3,6 @@
 package minio
 
 import (
-	"app/config"
 	apperrors "app/internal/entity/errors"
 	appminio "app/pkg/minio"
 	"app/test/mocks"
@@ -33,7 +32,7 @@ func setupMinio(t *testing.T) (*MinioAdapter, func()) {
 	accessKey := container.Username
 	secretKey := container.Password
 
-	cfg := &config.MinioConfig{
+	cfgMinio := &appminio.Config{
 		Endpoint:  connectionString,
 		AccessKey: accessKey,
 		SecretKey: secretKey,
@@ -43,16 +42,12 @@ func setupMinio(t *testing.T) (*MinioAdapter, func()) {
 		Timeout:   5 * time.Second,
 	}
 	l := mocks.NewMockLogger()
-	connector, err := appminio.NewConnector(cfg, &l)
+	connector, err := appminio.NewConnector(cfgMinio, l)
 	require.NoError(t, err)
 
-	adapter := NewMinioAdapter(connector, &l)
-
-	cleanup := func() {
+	return NewMinioAdapter(connector, l), func() {
 		_ = container.Terminate(ctx)
 	}
-
-	return adapter, cleanup
 }
 
 func TestMinioAdapterUploadMetadataAndExists(t *testing.T) {

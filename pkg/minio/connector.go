@@ -1,7 +1,6 @@
 package minio
 
 import (
-	"app/config"
 	"app/pkg/logger"
 	"context"
 	"fmt"
@@ -14,11 +13,11 @@ import (
 // TODO сделать обработку ошибок
 type Connector struct {
 	client *minio.Client
-	cfg    *config.MinioConfig
+	cfg    *Config
 	l      logger.Interface
 }
 
-func NewConnector(cfg *config.MinioConfig, l logger.Interface) (*Connector, error) {
+func NewConnector(cfg *Config, l logger.Interface) (*Connector, error) {
 
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),

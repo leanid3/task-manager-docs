@@ -3,8 +3,7 @@
 package minio
 
 import (
-	"app/config"
-	"app/test/mocks"
+	"app/test/mocks/logger"
 	"context"
 	"testing"
 	"time"
@@ -13,7 +12,7 @@ import (
 	tminio "github.com/testcontainers/testcontainers-go/modules/minio"
 )
 
-func setupMinioContainer(t *testing.T) (*config.MinioConfig, func()) {
+func setupMinioContainer(t *testing.T) (*Config, func()) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -32,7 +31,7 @@ func setupMinioContainer(t *testing.T) (*config.MinioConfig, func()) {
 	secretKey := container.Password
 
 	// Готовим конфиг для нашего Connector
-	cfg := &config.MinioConfig{
+	cfg := &Config{
 		Endpoint:  connectionString, // формат host:port
 		AccessKey: accessKey,
 		SecretKey: secretKey,
@@ -54,7 +53,7 @@ func TestConnectorLifecycle(t *testing.T) {
 	defer cleanup()
 
 	// Используем mock logger для тестов
-	l := mocks.NewMockLogger()
+	l := logger.NewMockLogger()
 
 	// Act: создаём коннектор
 	connector, err := NewConnector(cfg, l)

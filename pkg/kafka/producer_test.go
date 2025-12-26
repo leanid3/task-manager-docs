@@ -30,7 +30,7 @@ func TestProducerSendSuccess(t *testing.T) {
 	producer, err := NewProducer(ProducerConfig{
 		BootstrapServers: brokers,
 		ClientID:         "test-producer",
-	}, &mockLogger)
+	}, mockLogger)
 	require.NoError(t, err)
 	defer producer.Close()
 

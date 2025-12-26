@@ -5,7 +5,7 @@ package broker
 import (
 	apperrors "app/internal/entity/errors"
 	"app/internal/usecase"
-	"app/test/mock"
+	"app/test/mocks"
 	"context"
 	"strings"
 	"testing"
@@ -14,10 +14,10 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestTaskLLMHandleTaskStatusLLM(t *testing.T) {
+func TestTaskLLMHandle(t *testing.T) {
 	//Создаем моки
-	mockLogger := &mock.Logger{}
-	mockUsecase := &mock.TaskLLMUC{}
+	mockLogger := mocks.NewMockLogger()
+	mockUsecase := mocks.NewMockTaskLLMUC(t)
 
 	//Создаем handler
 	handler := &KafkaMessageHandler{

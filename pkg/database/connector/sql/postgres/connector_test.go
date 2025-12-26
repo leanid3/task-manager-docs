@@ -9,11 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"app/test/mocks"
+	"app/test/mocks/logger"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -97,8 +96,7 @@ func TestNewConnectorSuccess(t *testing.T) {
 		MinConnections: 1,
 	}
 
-	log := mocks.NewMockLogger()
-	log.On("Info", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return()
+	log := logger.NewMockLogger()
 
 	connector, err := NewConnector(cfg, log)
 	require.NoError(t, err)

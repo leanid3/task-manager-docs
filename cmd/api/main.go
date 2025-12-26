@@ -56,13 +56,34 @@ func main() {
 	l := logMgr.Get("app")
 	l.Info("logger manager initialized", "mode", cfg.Logger.Mode)
 	// Подключение к базе данных
-	postgresConnector, err := database.NewConnector(&cfg.Database, logMgr.Get("health"))
+	dbCfg := &database.Config{
+		Host:            cfg.Database.Host,
+		Port:            cfg.Database.Port,
+		User:            cfg.Database.User,
+		Password:        cfg.Database.Password,
+		Database:        cfg.Database.Database,
+		MaxConnections:  cfg.Database.MaxConnections,
+		MinConnections:  cfg.Database.MinConnections,
+		MaxConnLifetime: cfg.Database.MaxConnLifetime,
+		MaxConnIdleTime: cfg.Database.MaxConnIdleTime,
+	}
+	postgresConnector, err := database.NewConnector(dbCfg, logMgr.Get("health"))
 	if err != nil {
 		l.Error("failed to create postgres connector", "error", err)
 		os.Exit(1)
 	}
 
-	minioConnector, err := pkgminio.NewConnector(&cfg.Minio, logMgr.Get("minio"))
+	minioCfg := &pkgminio.Config{
+		Endpoint:  cfg.Minio.Endpoint,
+		AccessKey: cfg.Minio.AccessKey,
+		SecretKey: cfg.Minio.SecretKey,
+		Bucket:    cfg.Minio.Bucket,
+		Prefix:    cfg.Minio.Prefix,
+		UseSSL:    cfg.Minio.UseSSL,
+		Region:    cfg.Minio.Region,
+		Timeout:   cfg.Minio.Timeout,
+	}
+	minioConnector, err := pkgminio.NewConnector(minioCfg, logMgr.Get("minio"))
 	if err != nil {
 		l.Error("failed to create minio connector", "error", err)
 		os.Exit(1)

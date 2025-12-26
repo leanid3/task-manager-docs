@@ -32,3 +32,15 @@ type StreamReader interface {
 	io.Seeker
 	io.Closer
 }
+
+// Config - конфигурация для MinIO коннектора
+type Config struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Bucket    string
+	Prefix    string
+	UseSSL    bool
+	Region    string
+	Timeout   time.Duration
+}

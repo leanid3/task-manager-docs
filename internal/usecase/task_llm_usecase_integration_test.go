@@ -3,7 +3,6 @@
 package usecase
 
 import (
-	"app/config"
 	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
 	"app/internal/entity/repository"
@@ -307,7 +306,7 @@ func setupStorageRepo(t *testing.T, ctx context.Context, minioConnectionString s
 	accessKey := container.Username
 	secretKey := container.Password
 
-	cfg := &config.MinioConfig{
+	cfgMinio := &appminio.Config{
 		Endpoint:  minioConnectionString,
 		AccessKey: accessKey,
 		SecretKey: secretKey,
@@ -318,10 +317,10 @@ func setupStorageRepo(t *testing.T, ctx context.Context, minioConnectionString s
 	}
 
 	l := mocks.NewMockLogger()
-	connector, err := appminio.NewConnector(cfg, &l)
+	connector, err := appminio.NewConnector(cfgMinio, l)
 	require.NoError(t, err)
 
-	return minio.NewMinioAdapter(connector, &l)
+	return minio.NewMinioAdapter(connector, l)
 }
 
 func setupKafkaProducer(t *testing.T, bootstrapServers []string) appkafka.Producer {
