@@ -11,3 +11,21 @@
  3) Minio - connector, adapter
 ---
 Возможен доступ по swagger: ["http://localhost:8080/swagger/index.html"]
+---
+Запуск контейнера в dev среде:
+1) создать совой config в корне проекта:
+```bash
+    cp config.example.yaml config.yaml
+```
+2) Собрать образ в dev среде(параметры запуска можно изменить в Makefile):
+```bash
+    make build-dev
+```
+3) Запустить
+```bash
+    make run-dev
+```
+Запустить:
+```bash
+    
+```

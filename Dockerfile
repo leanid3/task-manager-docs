@@ -26,6 +26,7 @@ COPY . .
 # Генерируем swagger документацию
 RUN swag init -g cmd/api/main.go -o docs --parseDependency --parseInternal
 
+#TODO найти альтернативу для confluent-kafka-go, чтобы убрать CGO
 # Собираем бинарник с включенным CGO (требуется для confluent-kafka-go)
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o app ./cmd/api
 
@@ -50,11 +51,10 @@ RUN useradd -m -u 1000 appuser
 USER appuser
 
 # Получаем порт через build argument (по умолчанию 8080)
-ARG PORT=8080
-EXPOSE ${PORT}
-
-ENV PORT=${PORT}
-ENV APP_PORT=${PORT}
+# ARG PORT=8080
+ARG SERVER_PORT=8030
+EXPOSE ${SERVER_PORT}
+ENV SERVER_PORT=${PORT}
 
 # ============================================
 # Dev образ (использует config.yaml из проекта)
@@ -62,7 +62,8 @@ ENV APP_PORT=${PORT}
 FROM base AS dev
 
 # В dev режиме используем config.yaml из директории проекта
-COPY --chown=appuser:appuser config.yaml /app/config.yaml
+ARG CONFIG_FILE=config.yaml
+COPY --chown=appuser:appuser ${CONFIG_FILE} /app/config.yaml
 
 CMD ["./app"]
 
@@ -72,7 +73,7 @@ CMD ["./app"]
 FROM base AS prod
 
 # В prod режиме конфигурация загружается только из переменных окружения
-# Файл config.yaml не копируется - используется env/task-manager.env
+# Файл config.yaml не копируется - используется .env
 
 CMD ["./app"]
 
@@ -87,6 +88,6 @@ FROM dev
 #   docker build -t task-manager:dev --target dev .
 #   docker-compose build task-manager  # использует target: dev из docker-compose.yaml
 #
-# Prod режим (использует только переменные окружения из env/task-manager.env):
+# Prod режим (использует только переменные окружения из .env):
 #   docker build -t task-manager:prod --target prod .
 #   или в docker-compose.yaml изменить target: dev на target: prod

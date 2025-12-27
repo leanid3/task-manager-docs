@@ -14,7 +14,7 @@ logger:
   mode: stdout #file, stdout
 
 server:
-  port: 8081
+  port: 8080
   host: "0.0.0.0"
   prefork: false
   timeout: 30s
@@ -23,7 +23,7 @@ server:
   shutdown_timeout: 5s
 
 database:
-  host: "task-manager-database"
+  host: "postgres-task-manager"
   port: 5432
   user: "postgres"
   password: "postgres"

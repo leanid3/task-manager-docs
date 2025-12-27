@@ -1,0 +1,70 @@
+# .gitea/workflows/developer.yamlf
+name: Document Flow CI/CD Pipeline
+
+on:
+  push:
+    branches: [document-flow]
+
+jobs:
+  build-and-push:
+    runs-on: runner-local
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Debug - List repository structure
+        run: |
+          echo "📁 Current directory:"
+          pwd
+          echo ""
+          echo "📂 Repository structure:"
+          ls -la
+          echo ""
+      - name: Debug variables
+        run: |
+          echo "=== Checking vars context ==="
+          echo "DEV_HOST: '${{ vars.DEV_HOST }}'"
+          echo "DEV_PORT: '${{ vars.DEV_PORT }}'"
+          echo "HTTP_PORT: '${{ vars.HTTP_PORT }}'"
+          echo "METRICS_PORT: '${{ vars.METRICS_PORT }}'"
+          echo ""
+          echo "=== Checking secrets (masked) ==="
+          echo "REGISTRY_USERNAME: '${{ secrets.REGISTRY_USERNAME }}'"
+          echo "REGISTRY_TOKEN length: ${#REGISTRY_TOKEN}"
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+
+
+      - name: Set environment variables
+        run: |
+          echo "IMAGE_NAME=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:${{ gitea.sha }}" >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run tests
+        run: |
+          go test ./...
+
+      - name: Build image for document-flow
+        run: |
+          docker build \
+            --target prod \
+            --build-arg HTTP_PORT=${{ vars.HTTP_PORT }} \
+            --build-arg METRICS_PORT=${{ vars.METRICS_PORT }} \
+            -t ${{ env.IMAGE_TAG }} \
+            -t ${{ env.IMAGE_NAME }} .
+
+      - name: Login to registry
+        run: |
+          echo ${{ secrets.REGISTRY_TOKEN }} | docker login ${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
+
+      - name: Push to registry
+        run: |
+          docker push ${{ env.IMAGE_TAG }}
+          docker push ${{ env.IMAGE_NAME }}
+  
