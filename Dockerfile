@@ -51,11 +51,10 @@ RUN useradd -m -u 1000 appuser
 USER appuser
 
 # Получаем порт через build argument (по умолчанию 8080)
-ARG PORT=8080
-EXPOSE ${PORT}
-
-ENV PORT=${PORT}
-ENV APP_PORT=${PORT}
+# ARG PORT=8080
+ARG SERVER_PORT=8030
+EXPOSE ${SERVER_PORT}
+ENV SERVER_PORT=${PORT}
 
 # ============================================
 # Dev образ (использует config.yaml из проекта)

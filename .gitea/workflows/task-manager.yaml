@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: runner-local
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,8 +23,8 @@ jobs:
 
       - name: Set environment variables
         run: |
-          echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:latest" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:${{ gitea.sha }}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.LOCAL_HOST }}:${{ vars.LOCAL_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ vars.LOCAL_HOST}}:${{ vars.LOCAL_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:${{ gitea.sha }}" >> $GITHUB_ENV
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -39,15 +39,15 @@ jobs:
         run: |
           docker build \
             --target prod \
-            --build-arg HTTP_PORT=8080 \
-            --build-arg METRICS_PORT=9090 \
+            --build-arg HTTP_PORT=${{ vars.TASK_MANAGER_HTTP_PORT }} \
+            --build-arg METRICS_PORT=${{ vars.TASK_MANAGER_HTTP_PORT }} \
             -t ${{ env.IMAGE_TAG }} \
             -t ${{ env.IMAGE_NAME }} .
 
       - name: Login to registry
         run: |
           echo ${{ secrets.REGISTRY_TOKEN }} | \
-          docker login ${{ vars.HOST }}:${{ vars.PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          docker login ${{ vars.LOCAL_HOST}}:${{ vars.LOCAL_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
 
       - name: Push to registry
         run: |
@@ -55,17 +55,17 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}
   deploy:
       needs: build-and-push
-      runs-on: ubuntu-latest
-      if: github.ref == 'refs/heads/master'
+      runs-on: runner-prod
+      if: github.ref == 'refs/heads/task-manager'
       steps:
         - name: Set environment variables
           run: |
-            echo "IMAGE_NAME=${{ vars.HOST }}:${{ vars.PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:latest" >> $GITHUB_ENV
+            echo "IMAGE_NAME=${{ vars.LOCAL_HOST}}:${{ vars.LOCAL_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager:latest" >> $GITHUB_ENV
 
         - name: Login to registry
           run: |
             echo ${{ secrets.REGISTRY_TOKEN }} | \
-            docker login ${{ vars.HOST }}:${{ vars.PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+            docker login ${{ vars.LOCAL_HOST}}:${{ vars.LOCAL_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
 
         - name: Pull latest image
           run: docker pull ${{ env.IMAGE_NAME }}
@@ -167,7 +167,7 @@ jobs:
             sleep 10
             
             for i in {1..30}; do
-              if curl -f http://${{ vars.HOST }}:${{ vars.TASK_MANAGER_HTTP_PORT }}/health//live; then
+              if curl -f http://${{ vars.PROD_HOST}}:${{ vars.TASK_MANAGER_HTTP_PORT }}/health//live; then
                 echo "✅ Deployment successful!"
                 exit 0
               fi
