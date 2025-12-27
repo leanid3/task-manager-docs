@@ -103,8 +103,6 @@ jobs:
               -p ${{ vars.SERVER_PORT }}:${{ vars.SERVER_PORT }} \
               -p ${{ vars.METRICS_PORT }}:${{ vars.METRICS_PORT }} \
               --env-file ./.env \
-              -v ./logs:/app/logs \
-              --network document-flow-network \
               ${{ env.IMAGE_NAME }}
             rm -f ./.env
 
