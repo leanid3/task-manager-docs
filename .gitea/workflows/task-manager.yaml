@@ -55,7 +55,7 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}
   deploy:
       needs: build-and-push
-      runs-on: runner-prod
+      runs-on: runner-local
       if: github.ref == 'refs/heads/task-manager'
       steps:
         - name: Set environment variables
