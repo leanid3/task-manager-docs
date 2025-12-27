@@ -25,7 +25,6 @@ jobs:
           echo "=== Checking vars context ==="
           echo "LOCAL_HOST: '${{ vars.LOCAL_HOST }}'"
           echo "LOCAL_PORT: '${{ vars.LOCAL_PORT }}'"
-          echo "PROD_HOST: '${{ vars.PROD_HOST }}'"
           echo "TASK_MANAGER_HTTP_PORT: '${{ vars.TASK_MANAGER_HTTP_PORT }}'"
           echo ""
           echo "=== Checking secrets (masked) ==="
@@ -69,7 +68,7 @@ jobs:
           docker push ${{ env.IMAGE_NAME }}
   deploy:
       needs: build-and-push
-      runs-on: runner-prod
+      runs-on: runner-local
       if: github.ref == 'refs/heads/task-manager'
       steps:
         - name: Set environment variables
