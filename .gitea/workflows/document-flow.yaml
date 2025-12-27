@@ -25,7 +25,7 @@ jobs:
           echo "=== Checking vars context ==="
           echo "GIT_HOST: '${{ vars.GIT_HOST }}'"
           echo "GIT_PORT: '${{ vars.GIT_PORT }}'"
-          echo "HTTP_PORT: '${{ vars.HTTP_PORT }}'"
+          echo "SERVER_PORT: '${{ vars.SERVER_PORT }}'"
           echo "METRICS_PORT: '${{ vars.METRICS_PORT }}'"
           echo ""
           echo "=== Checking secrets (masked) ==="
@@ -37,8 +37,8 @@ jobs:
 
       - name: Set environment variables
         run: |
-          echo "IMAGE_NAME=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:latest" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:${{ gitea.sha }}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/document-flow:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/document-flow:${{ gitea.sha }}" >> $GITHUB_ENV
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -53,7 +53,7 @@ jobs:
         run: |
           docker build \
             --target prod \
-            --build-arg HTTP_PORT=${{ vars.HTTP_PORT }} \
+            --build-arg SERVER_PORT=${{ vars.SERVER_PORT }} \
             --build-arg METRICS_PORT=${{ vars.METRICS_PORT }} \
             -t ${{ env.IMAGE_TAG }} \
             -t ${{ env.IMAGE_NAME }} .

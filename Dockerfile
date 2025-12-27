@@ -53,8 +53,9 @@ USER appuser
 # Получаем порт через build argument (по умолчанию 8080)
 # ARG PORT=8080
 ARG SERVER_PORT=8030
+
 EXPOSE ${SERVER_PORT}
-ENV SERVER_PORT=${PORT}
+ENV SERVER_PORT=${SERVER_PORT}
 
 # ============================================
 # Dev образ (использует config.yaml из проекта)
