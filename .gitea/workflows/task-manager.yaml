@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: runner-local
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -46,7 +46,7 @@ jobs:
 
       - name: Login to registry
         run: |
-          echo ${{ secrets.REGISTRY_TOKEN }} | \
+          echo ${{ secrets.REGISTRY_TOKEN }} | \ 
           docker login ${{ vars.LOCAL_HOST}}:${{ vars.LOCAL_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
 
       - name: Push to registry
