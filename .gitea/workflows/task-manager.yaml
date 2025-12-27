@@ -20,6 +20,20 @@ jobs:
           echo "📂 Repository structure:"
           ls -la
           echo ""
+      - name: Debug variables
+        run: |
+          echo "=== Checking vars context ==="
+          echo "LOCAL_HOST: '${{ vars.LOCAL_HOST }}'"
+          echo "LOCAL_PORT: '${{ vars.LOCAL_PORT }}'"
+          echo "PROD_HOST: '${{ vars.PROD_HOST }}'"
+          echo "TASK_MANAGER_HTTP_PORT: '${{ vars.TASK_MANAGER_HTTP_PORT }}'"
+          echo ""
+          echo "=== Checking secrets (masked) ==="
+          echo "REGISTRY_USERNAME: '${{ secrets.REGISTRY_USERNAME }}'"
+          echo "REGISTRY_TOKEN length: ${#REGISTRY_TOKEN}"
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+
 
       - name: Set environment variables
         run: |
