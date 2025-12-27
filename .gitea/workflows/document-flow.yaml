@@ -16,15 +16,15 @@ jobs:
         run: |
           echo "📁 Current directory:"
           pwd
-          echo ""
+          echo "" 
           echo "📂 Repository structure:"
           ls -la
           echo ""
       - name: Debug variables
         run: |
           echo "=== Checking vars context ==="
-          echo "DEV_HOST: '${{ vars.DEV_HOST }}'"
-          echo "DEV_PORT: '${{ vars.DEV_PORT }}'"
+          echo "GIT_HOST: '${{ vars.GIT_HOST }}'"
+          echo "GIT_PORT: '${{ vars.GIT_PORT }}'"
           echo "HTTP_PORT: '${{ vars.HTTP_PORT }}'"
           echo "METRICS_PORT: '${{ vars.METRICS_PORT }}'"
           echo ""
@@ -37,8 +37,8 @@ jobs:
 
       - name: Set environment variables
         run: |
-          echo "IMAGE_NAME=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:latest" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:${{ gitea.sha }}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:${{ gitea.sha }}" >> $GITHUB_ENV
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -60,7 +60,7 @@ jobs:
 
       - name: Login to registry
         run: |
-          echo ${{ secrets.REGISTRY_TOKEN }} | docker login ${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          echo ${{ secrets.REGISTRY_TOKEN }} | docker login ${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
 
 
       - name: Push to registry
