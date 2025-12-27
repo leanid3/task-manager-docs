@@ -1,0 +1,127 @@
+# .gitea/workflows/developer.yamlf
+name: Dev CI/CD Pipeline
+
+on:
+  push:
+    branches: [dev]
+
+
+jobs:
+  build-and-push:
+    runs-on: runner-local
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Debug - List repository structure
+        run: |
+          echo "📁 Current directory:"
+          pwd
+          echo "" 
+          echo "📂 Repository structure:"
+          ls -la
+          echo ""
+      - name: Debug variables
+        run: |
+          echo "=== Checking vars context ==="
+          echo "GIT_HOST: '${{ vars.GIT_HOST }}'"
+          echo "GIT_PORT: '${{ vars.GIT_PORT }}'"
+          echo "SERVER_PORT: '${{ vars.SERVER_PORT }}'"
+          echo "METRICS_PORT: '${{ vars.METRICS_PORT }}'"
+          echo ""
+          echo "=== Checking secrets (masked) ==="
+          echo "REGISTRY_USERNAME: '${{ secrets.REGISTRY_USERNAME }}'"
+          echo "REGISTRY_TOKEN length: ${#REGISTRY_TOKEN}"
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+
+
+      - name: Set environment variables
+        run: |
+          echo "IMAGE_NAME=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/dev:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/dev:${{ gitea.sha }}" >> $GITHUB_ENV
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Run tests
+        run: |
+          go test ./...
+
+      - name: Build image for dev
+        run: |
+          docker build \
+            --target prod \
+            --build-arg SERVER_PORT=${{ vars.SERVER_PORT }} \
+            --build-arg METRICS_PORT=${{ vars.METRICS_PORT }} \
+            -t ${{ env.IMAGE_TAG }} \
+            -t ${{ env.IMAGE_NAME }} .
+
+      - name: Login to registry
+        run: |
+          echo ${{ secrets.REGISTRY_TOKEN }} | docker login ${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
+
+      - name: Push to registry
+        run: |
+          docker push ${{ env.IMAGE_TAG }}
+          docker push ${{ env.IMAGE_NAME }}
+  
+  deploy:
+      needs: build-and-push
+      runs-on: runner-local
+      if: github.ref == 'refs/heads/dev'
+      steps:
+        - name: Set environment variables
+          run: |
+            echo "IMAGE_NAME=${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/dev:latest" >> $GITHUB_ENV
+
+        - name: Login to registry
+          run: |
+            echo ${{ secrets.REGISTRY_TOKEN }} | \
+            docker login ${{ vars.GIT_HOST }}:${{ vars.GIT_PORT }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
+        - name: Pull latest image
+          run: docker pull ${{ env.IMAGE_NAME }}
+
+        - name: Stop old container
+          run: |
+            docker stop task-manager-app || true
+            docker rm task-manager-app || true
+
+        - name: Create production env file
+          run: |
+            cp ./.env.example ./.env
+
+        - name: Start container
+          run: |
+            docker run -d \
+              --name task-manager-app \
+              --restart unless-stopped \
+              -p ${{ vars.SERVER_PORT }}:${{ vars.SERVER_PORT }} \
+              -p ${{ vars.METRICS_PORT }}:${{ vars.METRICS_PORT }} \
+              --env-file ./.env \
+              -v ./logs:/app/logs \
+              --network document-flow-network \
+              ${{ env.IMAGE_NAME }}
+            rm -f ./.env
+
+        - name: Health check
+          run: |
+            echo "⏳ Waiting for service..."
+            sleep 10
+            
+            for i in {1..30}; do
+              if curl -f http://${{ vars.GIT_HOST }}:${{ vars.TASK_MANAGER_HTTP_PORT }}/health//live; then
+                echo "✅ Deployment successful!"
+                exit 0
+              fi
+              echo "Attempt $i/30 failed, retrying..."
+              sleep 5
+            done
+            
+            echo "❌ Health check failed"
+            docker logs task-manager-app --tail 50
+            exit 1
