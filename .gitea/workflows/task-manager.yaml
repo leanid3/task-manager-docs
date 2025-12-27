@@ -1,4 +1,4 @@
-# .gitea/workflows/developer.yamlf
+# .gitea/workflows/developer.yaml
 name: Task Manager CI/CD Pipeline
 
 on:
