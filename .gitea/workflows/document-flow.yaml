@@ -37,8 +37,8 @@ jobs:
 
       - name: Set environment variables
         run: |
-          echo "IMAGE_NAME=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:latest" >> $GITHUB_ENV
-          echo "IMAGE_TAG=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager/document-flow:${{ gitea.sha }}" >> $GITHUB_ENV
+          echo "IMAGE_NAME=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager-document-flow:latest" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ vars.DEV_HOST }}:${{ vars.DEV_PORT }}/$(echo '${{ gitea.repository }}' | tr '[:upper:]' '[:lower:]')/task-manager-document-flow:${{ gitea.sha }}" >> $GITHUB_ENV
 
       - name: Set up Go
         uses: actions/setup-go@v5
