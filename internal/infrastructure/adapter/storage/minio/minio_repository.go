@@ -37,15 +37,20 @@ func (r *MinioAdapter) UploadStream(ctx context.Context, objectName string, read
 		NumThreads:   4, //TODO сделать динамическим
 	}
 
-	//неизвесный размер файла
+	// неизвестный размер файла
 	if objectSize == -1 {
-		r.l.Info("unknown size of the file", "objectName", objectName)
+		r.l.Warn("file size is unknown, using -1", "object_name", objectName)
 	}
 
 	uploadInfo, err := r.client.PutObject(ctx, r.bucketName, objectName, reader, objectSize, putOpts)
 
 	if err != nil {
-		r.l.Error("failed to upload object", "error", err, "objectName", objectName)
+		r.l.Error("failed to upload object to storage",
+			"error", err,
+			"object_name", objectName,
+			"bucket", r.bucketName,
+			"size", objectSize,
+		)
 		return nil, apperrors.Wrap(
 			apperrors.CodeStorageError,
 			"failed to upload object to storage",
@@ -57,7 +62,7 @@ func (r *MinioAdapter) UploadStream(ctx context.Context, objectName string, read
 	}
 
 	r.l.Info("object uploaded successfully",
-		"objectName", objectName,
+		"object_name", objectName,
 		"bucket", r.bucketName,
 		"size", uploadInfo.Size,
 		"etag", uploadInfo.ETag,
@@ -76,20 +81,29 @@ func (r *MinioAdapter) UploadStream(ctx context.Context, objectName string, read
 func (r *MinioAdapter) DeleteObject(ctx context.Context, objectName string) error {
 	err := r.client.RemoveObject(ctx, r.bucketName, objectName, minio.RemoveObjectOptions{})
 	if err != nil {
-		r.l.Error("failed to delete object", "error", err, "objectName", objectName)
+		r.l.Error("failed to delete object from storage",
+			"error", err,
+			"object_name", objectName,
+			"bucket", r.bucketName,
+		)
 		return apperrors.Wrap(
 			apperrors.CodeStorageError,
 			"failed to delete object",
 			err,
 		)
 	}
+	r.l.Debug("object deleted successfully", "object_name", objectName, "bucket", r.bucketName)
 	return nil
 }
 
 func (r *MinioAdapter) GetObjectMetadata(ctx context.Context, objectName string) (*pkgminio.ObjectInfo, error) {
 	stat, err := r.client.StatObject(ctx, r.bucketName, objectName, minio.StatObjectOptions{})
 	if err != nil {
-		r.l.Error("failed to get object metadata", "error", err, "objectName", objectName)
+		r.l.Error("failed to get object metadata",
+			"error", err,
+			"object_name", objectName,
+			"bucket", r.bucketName,
+		)
 
 		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
 			return nil, apperrors.New(
@@ -121,11 +135,16 @@ func (r *MinioAdapter) ObjectExists(ctx context.Context, objectName string) (boo
 	_, err := r.client.StatObject(ctx, r.bucketName, objectName, minio.StatObjectOptions{})
 
 	if err != nil {
-		r.l.Error("failed to check object existence", "error", err, "objectName", objectName)
 		errResp := minio.ToErrorResponse(err)
+		// Не логируем ошибку, если объект просто не найден (это нормально)
 		if errResp.Code == "NoSuchKey" {
 			return false, nil
 		}
+		r.l.Error("failed to check object existence",
+			"error", err,
+			"object_name", objectName,
+			"bucket", r.bucketName,
+		)
 		return false, apperrors.Wrap(
 			apperrors.CodeStorageError,
 			"failed to check object existence",
@@ -151,7 +170,11 @@ func (r *MinioAdapter) ListObjects(ctx context.Context, prefix string, recursive
 	objectCh := r.client.ListObjects(ctx, r.bucketName, opts)
 	for object := range objectCh {
 		if object.Err != nil {
-			r.l.Error("failed to list objects", "error", object.Err, "prefix", prefix)
+			r.l.Error("failed to list objects",
+				"error", object.Err,
+				"prefix", prefix,
+				"bucket", r.bucketName,
+			)
 			return nil, apperrors.Wrap(
 				apperrors.CodeStorageError,
 				"failed to list objects",

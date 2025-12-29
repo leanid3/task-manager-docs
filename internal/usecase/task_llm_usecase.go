@@ -120,15 +120,15 @@ func (uc *TaskLLMUC) CreateTask(
 		"size", filesize,
 		"filename", filename,
 		"request_id", requestID,
-		"opts", opts,
 	)
 
 	// Storage - загрузка файла в хранилище
 	if _, err := uc.storageRepo.UploadStream(ctx, storagePath, reader, filesize, opts); err != nil {
-		uc.l.Error("upload to storage failed",
+		uc.l.Error("failed to upload file to storage",
 			"error", err,
 			"task_id", taskID,
 			"storage_path", storagePath,
+			"filename", filename,
 			"request_id", requestID,
 		)
 
@@ -141,23 +141,24 @@ func (uc *TaskLLMUC) CreateTask(
 			"storage_path": storagePath,
 		}).WithStatus(http.StatusInternalServerError)
 	}
-	//Удаление файла из хранилища в случае ошибки загрузки
+	// Удаление файла из хранилища в случае ошибки загрузки
 	needsCleanup := true
 	defer func() {
 		if needsCleanup {
 			if err := uc.storageRepo.DeleteObject(context.Background(), storagePath); err != nil {
-				uc.l.Error("compensating action: delete from storage failed",
+				uc.l.Error("failed to cleanup storage after error",
 					"error", err,
 					"storage_path", storagePath,
+					"task_id", taskID,
 					"request_id", requestID,
 				)
 			}
 		}
 	}()
 
-	// Database - создание задачи в базе данных внутри транзакции
+	// Database - создание задачи в базе данных
 	if err := uc.taskRepo.Create(ctx, &taskLLM.Task); err != nil {
-		uc.l.Error("failed to create task in DB",
+		uc.l.Error("failed to create task in database",
 			"error", err,
 			"task_id", taskID,
 			"request_id", requestID,
@@ -174,7 +175,6 @@ func (uc *TaskLLMUC) CreateTask(
 	cmd := domain.NewTaskLLMCommand(taskLLM)
 	headers := cmd.Headers.ToMap()
 	if err := uc.producer.Send(ctx, uc.topic, taskID.String(), headers, cmd.Value); err != nil {
-
 		uc.l.Error("failed to publish task to queue",
 			"error", err,
 			"task_id", taskID,
@@ -183,9 +183,10 @@ func (uc *TaskLLMUC) CreateTask(
 		)
 
 		if updateErr := uc.taskRepo.UpdateWithError(ctx, taskID, domain.TaskStatusFailed, err.Error()); updateErr != nil {
-			uc.l.Error("failed to save error message",
+			uc.l.Error("failed to update task with error status",
 				"error", updateErr,
 				"task_id", taskID,
+				"original_error", err.Error(),
 			)
 		}
 
@@ -206,7 +207,7 @@ func (uc *TaskLLMUC) CreateTask(
 		"request_id", requestID,
 	)
 
-	//Удаление файла из хранилища в случае успешного создания задачи
+	// Удаление файла из хранилища в случае успешного создания задачи не требуется
 	needsCleanup = false
 
 	return taskID, nil
@@ -214,11 +215,14 @@ func (uc *TaskLLMUC) CreateTask(
 
 // GetTaskByID - get task by ID
 func (uc *TaskLLMUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
-	uc.l.Debug("getting task", "taskID", taskID)
+	uc.l.Debug("getting task by ID", "task_id", taskID)
 
 	task, err := uc.taskRepo.GetByID(ctx, taskID)
 	if err != nil {
-		uc.l.Error("failed to get task", "error", err)
+		uc.l.Error("failed to get task from database",
+			"error", err,
+			"task_id", taskID,
+		)
 		return nil, apperrors.Wrap(
 			apperrors.CodeDatabaseError,
 			"не удалось получить задачу из базы данных",
@@ -228,15 +232,23 @@ func (uc *TaskLLMUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*domain
 		}).WithStatus(http.StatusInternalServerError)
 	}
 
-	uc.l.Debug("task found", "taskID", taskID)
+	uc.l.Debug("task retrieved successfully", "task_id", taskID, "status", task.Status)
 	return task, nil
 }
 
 func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
-	uc.l.Debug("UpdateTaskStatus start", "evt", evt)
+	uc.l.Debug("updating task status",
+		"task_id", evt.Key.TaskID,
+		"status_code", evt.Headers.Status,
+	)
+
 	//TODO также как и в handle - сделать Middelware для преобразования кодов или перейти на коды статусов
 	taskStatus, ok := domain.TaskStatus("").FromKafkaCode(evt.Headers.Status)
 	if !ok {
+		uc.l.Error("unknown task status code",
+			"task_id", evt.Key.TaskID,
+			"status_code", evt.Headers.Status,
+		)
 		return apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
 	}
 
@@ -272,11 +284,17 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 		}
 		return uc.taskRepo.UpdateWithError(ctx, evt.Key.TaskID, domain.TaskStatusFailed, evt.Value.ErrorMessage)
 	case domain.TaskStatusPending:
+		uc.l.Debug("task status is pending, no update needed", "task_id", evt.Key.TaskID)
 		return nil
 	case domain.TaskStatusCancelled:
+		uc.l.Debug("task status is cancelled, no update needed", "task_id", evt.Key.TaskID)
 		return nil
 	default:
-		uc.l.Error("unknown task status", "status", taskStatus)
+		uc.l.Error("unknown task status",
+			"task_id", evt.Key.TaskID,
+			"status", taskStatus,
+			"status_code", evt.Headers.Status,
+		)
 		return apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
 	}
 }

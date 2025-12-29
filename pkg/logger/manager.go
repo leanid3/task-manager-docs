@@ -3,7 +3,6 @@ package logger
 
 import (
 	"io"
-	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -65,6 +64,9 @@ func (mgr *LoggerManager) initStdoutMode(cfg LoggerManagerConfig) error {
 }
 
 func (mgr *LoggerManager) initFileMode(cfg LoggerManagerConfig) error {
+	// Используем fallback logger для логирования ошибок инициализации
+	fallbackLogger := NewFallback()
+
 	openLogWriter := func(path, defaultPath string) io.Writer {
 		if path == "" {
 			path = defaultPath
@@ -77,12 +79,12 @@ func (mgr *LoggerManager) initFileMode(cfg LoggerManagerConfig) error {
 		if cfg.MaxSize <= 0 {
 			dir := filepath.Dir(path)
 			if err := os.MkdirAll(dir, 0755); err != nil {
-				slog.Error("failed to create log directory", "dir", dir, "error", err)
+				fallbackLogger.Error("failed to create log directory", "dir", dir, "error", err)
 				return os.Stdout
 			}
 			file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 			if err != nil {
-				slog.Error("failed to open log file", "path", path, "error", err)
+				fallbackLogger.Error("failed to open log file", "path", path, "error", err)
 				return os.Stdout
 			}
 			return file
@@ -91,7 +93,7 @@ func (mgr *LoggerManager) initFileMode(cfg LoggerManagerConfig) error {
 		// Используем RotatingWriter
 		rw, err := NewRotatingWriter(path, cfg.MaxSize, cfg.MaxFiles, cfg.ClearOnStart)
 		if err != nil {
-			slog.Error("failed to create rotating writer", "path", path, "error", err)
+			fallbackLogger.Error("failed to create rotating writer", "path", path, "error", err)
 			return os.Stdout
 		}
 		mgr.rotatingWriters = append(mgr.rotatingWriters, rw)
@@ -118,10 +120,13 @@ func (mgr *LoggerManager) Get(category string) Interface {
 }
 
 func (mgr *LoggerManager) Close() error {
+	// Используем fallback logger для логирования ошибок закрытия
+	fallbackLogger := NewFallback()
+
 	// Закрываем все rotating writers
 	for _, rw := range mgr.rotatingWriters {
 		if err := rw.Close(); err != nil {
-			slog.Error("failed to close rotating writer", "error", err)
+			fallbackLogger.Error("failed to close rotating writer", "error", err)
 		}
 	}
 	return nil

@@ -1,0 +1,157 @@
+# ============================================
+# Build arguments
+# ============================================
+ARG GO_VERSION=1.24
+ARG SERVER_PORT=8030
+
+# ============================================
+# Стадия базовых зависимостей
+# ============================================
+FROM golang:${GO_VERSION} AS base
+
+# Устанавливаем зависимости для компиляции confluent-kafka-go (требует CGO)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    librdkafka-dev \
+    pkg-config \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# ============================================
+# Стадия загрузки зависимостей (с кэшированием)
+# ============================================
+FROM base AS dependencies
+
+# Копируем только go.mod и go.sum для эффективного кэширования
+COPY go.mod go.sum ./
+
+# Используем BuildKit cache mount для ускорения загрузки зависимостей
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=bind,source=go.sum,target=go.sum \
+    --mount=type=bind,source=go.mod,target=go.mod \
+    go mod download -x
+
+# ============================================
+# Dev окружение (для локальной разработки)
+# ============================================
+FROM base AS dev
+
+# Устанавливаем dev инструменты
+RUN go install github.com/go-delve/delve/cmd/dlv@latest && \
+    go install github.com/swaggo/swag/cmd/swag@v1.8.12
+
+WORKDIR /app
+
+# Копируем go.mod и go.sum
+COPY go.mod go.sum ./
+
+# Загружаем зависимости с кэшированием
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    go mod download
+
+# Копируем исходники
+COPY . .
+
+# Открываем порты
+ARG SERVER_PORT
+EXPOSE ${SERVER_PORT} 2345
+
+# Метаданные
+LABEL stage=development
+LABEL description="Development environment"
+
+# Запускаем приложение стандартным способом
+CMD ["go", "run", "./cmd/api"]
+
+# ============================================
+# Стадия сборки (для production)
+# ============================================
+FROM dependencies AS builder
+
+# Устанавливаем swag для генерации swagger документации
+RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
+
+# Копируем исходники
+COPY . .
+
+# Генерируем swagger документацию
+RUN swag init -g cmd/api/main.go -o docs --parseDependency --parseInternal
+
+# Собираем бинарник с включенным CGO и кэшированием build cache
+ENV GOCACHE=/root/.cache/go-build
+RUN --mount=type=cache,target=/go/pkg/mod/ \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 GOOS=linux go build \
+    -ldflags="-s -w -X main.Version=${VERSION:-dev} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -o app ./cmd/api
+
+# Проверяем, что бинарник собран
+RUN file app && ls -lh app
+
+# ============================================
+# Базовый runtime образ
+# ============================================
+FROM debian:bookworm-slim AS runtime-base
+
+# Устанавливаем только runtime зависимости
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    librdkafka1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Создаём непривилегированного пользователя
+RUN groupadd -r appuser --gid=1000 && \
+    useradd -r -g appuser --uid=1000 --no-log-init --create-home appuser
+
+WORKDIR /app
+
+# Копируем бинарник из builder
+COPY --from=builder --chown=appuser:appuser /build/app .
+
+# Создаем директорию для логов
+RUN mkdir -p /app/logs && chown appuser:appuser /app/logs
+
+# Переключаемся на непривилегированного пользователя
+USER appuser
+
+ARG SERVER_PORT
+EXPOSE ${SERVER_PORT}
+ENV SERVER_PORT=${SERVER_PORT}
+
+# Метаданные
+LABEL org.opencontainers.image.source="http://192.168.78.61:4925/TTS-developer/task-manager"
+LABEL org.opencontainers.image.description="Task Manager Service"
+
+# ============================================
+# Production образ (только переменные окружения)
+# ============================================
+FROM runtime-base AS prod
+
+# В prod режиме конфигурация загружается только из переменных окружения
+ENV ENVIRONMENT=production
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${SERVER_PORT}/health/live || exit 1
+
+CMD ["./app"]
+
+# ============================================
+# Staging образ (с config файлом для отладки)
+# ============================================
+FROM runtime-base AS staging
+
+ARG CONFIG_FILE=config.yaml
+COPY --chown=appuser:appuser ${CONFIG_FILE} /app/config.yaml
+
+ENV ENVIRONMENT=staging
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:${SERVER_PORT}/health/live || exit 1
+
+CMD ["./app"]

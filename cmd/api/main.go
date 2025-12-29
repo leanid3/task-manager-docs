@@ -13,7 +13,6 @@ import (
 	"app/pkg/logger"
 	pkgminio "app/pkg/minio"
 	"context"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,9 +22,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cfg, err := config.Load()
+	// Используем fallback logger до инициализации основного менеджера
+	fallbackLogger := logger.NewFallback()
+
+	cfg, err := config.Load(fallbackLogger)
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
+		fallbackLogger.Error("failed to load config", "error", err)
 		os.Exit(1)
 	}
 
@@ -48,13 +50,13 @@ func main() {
 		ClearOnStart: cfg.Logger.ClearOnStart,
 	})
 	if err != nil {
-		slog.Error("failed to init log manager", "error", err)
+		fallbackLogger.Error("failed to init log manager", "error", err)
 		os.Exit(1)
 	}
 	defer logMgr.Close()
 
 	l := logMgr.Get("app")
-	l.Info("logger manager initialized", "mode", cfg.Logger.Mode)
+	l.Info("logger manager initialized", "mode", cfg.Logger.Mode, "level", cfg.Logger.Level)
 	// Подключение к базе данных
 	dbCfg := &database.Config{
 		Host:            cfg.Database.Host,
@@ -104,24 +106,23 @@ func main() {
 
 	// Репозитории
 	taskRepo := postgres.NewTaskRepository(postgresConnector.Pool())
-	logMgr.Get("health").Info("Task repo created")
-
 	storageRepo := minio.NewMinioAdapter(minioConnector, logMgr.Get("minio"))
-	logMgr.Get("health").Info("minio repo created")
 
 	// Usecases
 	taskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0], logMgr.Get("task"))
-	logMgr.Get("health").Info("task llm usecase created")
-
 	usecases := usecase.NewUseCases(taskLLMUC)
-	logMgr.Get("health").Info("task llm usecases created")
+	
+	l.Info("application components initialized", 
+		"task_repo", "created",
+		"storage_repo", "created",
+		"task_usecase", "created")
 
 	// Health check
 	if err := postgresConnector.HealthCheck(context.Background()); err != nil {
-		logMgr.Get("health").Error("postgres health check failed", "error", err)
+		l.Error("postgres health check failed", "error", err)
 		os.Exit(1)
 	}
-	logMgr.Get("health").Info("postgres health check passed")
+	l.Info("postgres health check passed")
 
 	//TODO расширить для нескольких типов tasks
 	kafkaHandler := brokerhandlers.NewKafkaMessageHandler(*usecases, logMgr.Get("kafka"))
@@ -140,32 +141,32 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ✅ Запускаем CONSUMER в фоне
+	// Запускаем CONSUMER в фоне
 	go func() {
-		l.Info("🚀 Starting Kafka consumer...")
+		l.Info("starting kafka consumer", "topics", cfg.Broker.Topics, "group_id", cfg.Broker.ConsumerGroupID)
 		if err := cons.Start(ctx); err != nil {
 			l.Error("kafka consumer failed", "error", err)
 		}
-		l.Info("🛑 Kafka consumer stopped")
+		l.Info("kafka consumer stopped")
 	}()
 
-	// ✅ HTTP сервер (главный поток)
+	// HTTP сервер (главный поток)
 	httpServer := httpserver.New(logMgr.Get("app"), httpserver.Port(cfg.Server.Port), httpserver.ReadTimeout(cfg.Server.ReadTimeout))
 	handlers.NewRoutes(httpServer.Engine(), cfg, *usecases, logMgr.Get("http"))
 
-	l.Info("🚀 Starting HTTP server", "port", cfg.Server.Port)
-	httpServer.Start() // ← Теперь запустится!
+	l.Info("starting HTTP server", "port", cfg.Server.Port, "host", cfg.Server.Host)
+	httpServer.Start()
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	l.Info("🛑 Shutting down...")
+	l.Info("shutting down application")
 	cancel() // Остановит consumer
 	httpServer.Shutdown()
 	cons.Stop()
 	postgresConnector.Close()
 
-	l.Info("✅ Graceful shutdown complete")
+	l.Info("graceful shutdown complete")
 }

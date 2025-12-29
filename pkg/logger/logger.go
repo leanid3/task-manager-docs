@@ -26,10 +26,16 @@ type Logger struct {
 
 var _ Interface = (*Logger)(nil)
 
+// NewFallback создает простой логгер для использования до инициализации основного менеджера
+// Используется в критических местах, где логгер еще не инициализирован
+func NewFallback() Interface {
+	return New(os.Stderr, "info", "text")
+}
+
 func New(w io.Writer, level string, format string) *Logger {
 	var l slog.Level
 
-	//Оределяем и устанваливаем уровень логирования
+	// Определяем и устанавливаем уровень логирования
 	switch strings.ToLower(level) {
 	case "debug":
 		l = slog.LevelDebug

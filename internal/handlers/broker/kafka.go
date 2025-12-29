@@ -31,14 +31,13 @@ func (h *KafkaMessageHandler) Handle(ctx context.Context, msg *kafka.Message) er
 	//TODO сделать общию валидацию сообщения
 	//TODO при добавлении новых типов сообщений, добавить обработку в этот switch
 
-	h.l.Info("Raw Kafka message received",
+	h.l.Debug("kafka message received",
 		"topic", *msg.TopicPartition.Topic,
 		"partition", msg.TopicPartition.Partition,
 		"offset", msg.TopicPartition.Offset,
 		"key", string(msg.Key),
-		"value", string(msg.Value),
 		"value_length", len(msg.Value),
-		"headers", msg.Headers)
+	)
 	//TODO вынести генерацию маршрутов в конфиг
 	switch topic := *msg.TopicPartition.Topic; topic {
 	case "tasks_llm":

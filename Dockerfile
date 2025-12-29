@@ -26,7 +26,6 @@ COPY . .
 # Генерируем swagger документацию
 RUN swag init -g cmd/api/main.go -o docs --parseDependency --parseInternal
 
-#TODO найти альтернативу для confluent-kafka-go, чтобы убрать CGO
 # Собираем бинарник с включенным CGO (требуется для confluent-kafka-go)
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o app ./cmd/api
 
@@ -52,7 +51,7 @@ USER appuser
 
 # Получаем порт через build argument (по умолчанию 8080)
 # ARG PORT=8080
-ARG SERVER_PORT=8030
+ARG SERVER_PORT=8080
 
 EXPOSE ${SERVER_PORT}
 ENV SERVER_PORT=${SERVER_PORT}

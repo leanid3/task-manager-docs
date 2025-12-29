@@ -1,9 +1,9 @@
 package database
 
 import (
+	"app/pkg/logger"
 	"context"
 	"fmt"
-	"log/slog"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -23,11 +23,11 @@ var (
 	_ DB = (pgx.Tx)(nil)
 )
 
-func WithTransaction(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx) error) error {
-	slog.Info("beginning transaction")
+func WithTransaction(ctx context.Context, pool *pgxpool.Pool, l logger.Interface, fn func(tx pgx.Tx) error) error {
+	l.Debug("beginning transaction")
 	tx, err := pool.Begin(ctx)
 	if err != nil {
-		slog.Error("failed to begin transaction", "error", err)
+		l.Error("failed to begin transaction", "error", err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
@@ -35,23 +35,25 @@ func WithTransaction(ctx context.Context, pool *pgxpool.Pool, fn func(tx pgx.Tx)
 	defer func() {
 		if p := recover(); p != nil {
 			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				slog.Error("failed to rollback transaction", "error", rollbackErr)
+				l.Error("failed to rollback transaction after panic", "error", rollbackErr, "panic", p)
 			}
 			panic(p)
 		} else if fnErr != nil {
 			if rollbackErr := tx.Rollback(ctx); rollbackErr != nil {
-				slog.Error("failed to rollback transaction", "error", rollbackErr)
+				l.Error("failed to rollback transaction", "error", rollbackErr)
 			}
 		} else {
 			if commitErr := tx.Commit(ctx); commitErr != nil {
-				slog.Error("failed to commit transaction", "error", commitErr)
+				l.Error("failed to commit transaction", "error", commitErr)
 				fnErr = fmt.Errorf("failed to commit transaction: %w", commitErr)
+			} else {
+				l.Debug("transaction committed successfully")
 			}
 		}
 	}()
 	fnErr = fn(tx)
 	if fnErr != nil {
-		slog.Error("transaction failed", "error", fnErr)
+		l.Error("transaction failed", "error", fnErr)
 		return fmt.Errorf("transaction failed: %w", fnErr)
 	}
 	return fnErr

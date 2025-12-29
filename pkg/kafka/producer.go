@@ -74,14 +74,18 @@ func NewProducer(config ProducerConfig, l logger.Interface) (Producer, error) {
 
 // Send отправляет TaskCommand в Kafka
 func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeaders map[string]string, cmdValue interface{}) error {
-	p.l.Debug("Producer.Send - start",
-		"key", key,
-		"Headers", cmdHeaders,
-		"Value", cmdValue,
+	p.l.Debug("sending message to kafka",
 		"topic", topic,
+		"key", key,
 	)
+
 	data, err := json.Marshal(cmdValue)
 	if err != nil {
+		p.l.Error("failed to marshal message",
+			"error", err,
+			"topic", topic,
+			"key", key,
+		)
 		return fmt.Errorf("failed to marshal task command: %w", err)
 	}
 
@@ -91,9 +95,8 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 		Headers:        p.headersToBroker(cmdHeaders),
 		Value:          data,
 	}
-	p.l.Debug("Producer message: ", "msg", msg)
-	deliveryChan := make(chan kafka.Event, 1)
 
+	deliveryChan := make(chan kafka.Event, 1)
 	p.client.Produce(msg, deliveryChan)
 
 	select {
@@ -103,8 +106,11 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 			select {
 			case ev := <-deliveryChan:
 				if msg, ok := ev.(*kafka.Message); ok && msg.TopicPartition.Error != nil {
-					p.l.Warn("message delivery failed after ctx cancel",
-						"task_id", key, "error", msg.TopicPartition.Error)
+					p.l.Warn("message delivery cancelled",
+						"topic", topic,
+						"key", key,
+						"error", msg.TopicPartition.Error,
+					)
 				}
 			case <-time.After(100 * time.Millisecond): // timeout drain
 			}
@@ -115,16 +121,18 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 		case *kafka.Message:
 			if e.TopicPartition.Error != nil {
 				p.l.Error("message delivery failed",
-					"task_id", key,
+					"topic", topic,
+					"key", key,
 					"error", e.TopicPartition.Error,
-					"topic", topic)
+				)
 				return fmt.Errorf("delivery failed: %w", e.TopicPartition.Error)
 			}
-			p.l.Debug("message delivered",
-				"task_id", key,
+			p.l.Debug("message delivered successfully",
 				"topic", topic,
+				"key", key,
 				"partition", e.TopicPartition.Partition,
-				"offset", e.TopicPartition.Offset)
+				"offset", e.TopicPartition.Offset,
+			)
 			return nil
 		}
 	}
@@ -148,15 +156,19 @@ func (p *producer) Close() error {
 
 		// Drain events чтобы избежать memory leak
 		drained := false
+		undeliveredCount := 0
 		for i := 0; i < 1000 && !drained; i++ { // max pending messages
 			select {
 			case ev := <-p.client.Events():
 				if msg, ok := ev.(*kafka.Message); ok && msg.TopicPartition.Error != nil {
-					p.l.Warn("undelivered message on close", "error", msg.TopicPartition.Error)
+					undeliveredCount++
 				}
 			default:
 				drained = true
 			}
+		}
+		if undeliveredCount > 0 {
+			p.l.Warn("undelivered messages on close", "count", undeliveredCount)
 		}
 		p.client.Close()
 	})

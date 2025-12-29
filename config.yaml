@@ -14,7 +14,7 @@ logger:
   mode: stdout #file, stdout
 
 server:
-  port: 8081
+  port: 8080
   host: "0.0.0.0"
   prefork: false
   timeout: 30s
@@ -44,7 +44,7 @@ broker:
   # Producer
   producer_acks: "-1"
   producer_idempotence: true
-  producer_compression: "snappy"
+  producer_compression: "none"
   producer_retries: 3
   producer_batch_size: 16384
   producer_linger_ms: 10

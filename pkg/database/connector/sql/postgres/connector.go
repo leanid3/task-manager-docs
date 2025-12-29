@@ -26,10 +26,10 @@ func NewConnector(cfg *Config, l logger.Interface) (*Connector, error) {
 		cfg.MaxConnections,
 		cfg.MinConnections,
 	)
-	l.Info("success - parse connection string", "connString", connString)
+
 	poolConfig, err := pgxpool.ParseConfig(connString)
 	if err != nil {
-		l.Error("failed - parse connection string", "error", err)
+		l.Error("failed to parse connection string", "error", err, "host", cfg.Host, "port", cfg.Port, "database", cfg.Database)
 		return nil, fmt.Errorf("failed to parse connection string: %w", err)
 	}
 
@@ -41,17 +41,22 @@ func NewConnector(cfg *Config, l logger.Interface) (*Connector, error) {
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {
-		l.Error("failed - create pool", "error", err)
-		return nil, fmt.Errorf("failed - create pool: %w", err)
+		l.Error("failed to create connection pool", "error", err, "host", cfg.Host, "port", cfg.Port, "database", cfg.Database)
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
 	// Проверяем, что соединение работает
 	if err := pool.Ping(context.Background()); err != nil {
-		l.Error("failed - ping pool", "error", err)
-		return nil, fmt.Errorf("failed - ping pool: %w", err)
+		l.Error("failed to ping database", "error", err, "host", cfg.Host, "port", cfg.Port, "database", cfg.Database)
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	l.Info("success - postgres connector created")
+	l.Info("postgres connector created",
+		"host", cfg.Host,
+		"port", cfg.Port,
+		"database", cfg.Database,
+		"max_connections", cfg.MaxConnections,
+		"min_connections", cfg.MinConnections)
 	return &Connector{
 		pool: pool,
 		cfg:  cfg,
@@ -60,18 +65,16 @@ func NewConnector(cfg *Config, l logger.Interface) (*Connector, error) {
 }
 
 func (c *Connector) Close() error {
-	c.l.Info("success - closing postgres connector")
+	c.l.Info("closing postgres connector")
 	c.pool.Close()
 	return nil
 }
 
 func (c *Connector) Pool() *pgxpool.Pool {
-	c.l.Info("success - getting postgres pool")
 	return c.pool
 }
 
 func (c *Connector) HealthCheck(ctx context.Context) error {
-	c.l.Info("success - checking postgres health")
 	return c.pool.Ping(ctx)
 }
 

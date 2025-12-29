@@ -18,31 +18,41 @@ type TaskLLMUCInterface interface {
 
 // TODO вынести в другой namespace
 func (h *KafkaMessageHandler) HandleTaskStatusLLM(ctx context.Context, msg *kafka.Message) error {
-	h.l.Debug("HandleTaskStatusLLM start", "msg", msg)
+	h.l.Debug("handling task status LLM message",
+		"topic", *msg.TopicPartition.Topic,
+		"partition", msg.TopicPartition.Partition,
+		"offset", msg.TopicPartition.Offset,
+		"key", string(msg.Key),
+	)
 	// Обрезаем пробельные символы из ключа перед парсингом UUID
 	taskIDStr := strings.TrimSpace(string(msg.Key))
 	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
-		h.l.Error("failed to parse task_id from message key", "error", err, "key", string(msg.Key), "topic", *msg.TopicPartition.Topic)
+		h.l.Error("failed to parse task_id from message key",
+			"error", err,
+			"key", string(msg.Key),
+			"topic", *msg.TopicPartition.Topic,
+		)
 		return apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "invalid task_id format", err)
 	}
 
-	valuePreview := ""
-	if len(msg.Value) > 0 {
-		previewLen := min(100, len(msg.Value))
-		valuePreview = string(msg.Value[:previewLen])
-	}
-
-	h.l.Info("Processing TaskStatusLLM",
+	h.l.Info("processing task status LLM event",
 		"topic", *msg.TopicPartition.Topic,
-		"task_id", taskIDStr,
-		"value_preview", valuePreview)
+		"task_id", taskID,
+		"partition", msg.TopicPartition.Partition,
+		"offset", msg.TopicPartition.Offset,
+	)
 
 	// 1. Парсим TaskLLMStatusEvent из value
 	var kafkaEvent domain.TaskLLMStatusEvent
 	if len(msg.Value) > 0 {
 		if err := json.Unmarshal(msg.Value, &kafkaEvent.Value); err != nil {
-			h.l.Error("failed to unmarshal task status event", "error", err, "topic", *msg.TopicPartition.Topic)
+			h.l.Error("failed to unmarshal task status event",
+				"error", err,
+				"topic", *msg.TopicPartition.Topic,
+				"task_id", taskID,
+				"value_length", len(msg.Value),
+			)
 			return apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "failed to unmarshal task status event", err)
 		}
 	}

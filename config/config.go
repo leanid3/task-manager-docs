@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log/slog"
+	"app/pkg/logger"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -50,7 +50,7 @@ type BrokerConfig struct {
 	ConsumerEnableAutoCommit     bool   `mapstructure:"consumer_auto_commit" yaml:"consumer_auto_commit" env:"BROKER_CONSUMER_AUTO_COMMIT"`
 	ConsumerAutoCommitIntervalMs int    `mapstructure:"consumer_commit_interval_ms" yaml:"consumer_commit_interval_ms" env:"BROKER_CONSUMER_COMMIT_INTERVAL_MS"`
 	ConsumerSessionTimeoutMs     int    `mapstructure:"consumer_session_timeout_ms" yaml:"consumer_session_timeout_ms" env:"BROKER_CONSUMER_SESSION_TIMEOUT_MS"`
-	ConsumerHeartbeatIntervalMs  int    `mapstructure:"consumer_heartbeat_interval_ms" yaml:"consumer_heartbeat_interval_ms" env:"BROKER_CONSUMER_HEARTBEAT_INTERVAL_MS"	`
+	ConsumerHeartbeatIntervalMs  int    `mapstructure:"consumer_heartbeat_interval_ms" yaml:"consumer_heartbeat_interval_ms" env:"BROKER_CONSUMER_HEARTBEAT_INTERVAL_MS"`
 	ConsumerMaxPollRecords       int    `mapstructure:"consumer_max_poll_records" yaml:"consumer_max_poll_records" env:"BROKER_CONSUMER_MAX_POLL_RECORDS"`
 
 	// Безопасность (общая)
@@ -71,7 +71,7 @@ type LoggerConfig struct {
 	HealthPath   string `mapstructure:"health_path" yaml:"health_path" env:"LOGGER_HEALTH_PATH"`
 	HTTPPath     string `mapstructure:"http_path" yaml:"http_path" env:"LOGGER_HTTP_PATH"`
 	KafkaPath    string `mapstructure:"kafka_path" yaml:"kafka_path" env:"LOGGER_KAFKA_PATH"`
-	MinioPath    string `mapstructure:"minio_path" yaml:"minio_path" env:"LOGGER_MINIO_PATH"	`
+	MinioPath    string `mapstructure:"minio_path" yaml:"minio_path" env:"LOGGER_MINIO_PATH"`
 	TaskPath     string `mapstructure:"task_path" yaml:"task_path" env:"LOGGER_TASK_PATH"`
 	S3Path       string `mapstructure:"s3_path" yaml:"s3_path" env:"LOGGER_S3_PATH"`
 	MaxSize      int64  `mapstructure:"max_size" yaml:"max_size" env:"LOGGER_MAX_SIZE"`                   // максимальный размер файла в мегабайтах (0 = без ограничений)
@@ -112,7 +112,7 @@ type MinioConfig struct {
 	Timeout   time.Duration `mapstructure:"Timeout" yaml:"Timeout" env:"MINIO_TIMEOUT"`
 }
 
-func Load() (*Config, error) {
+func Load(l logger.Interface) (*Config, error) {
 	var cfg Config
 
 	// Сначала пытаемся загрузить из файла
@@ -121,9 +121,9 @@ func Load() (*Config, error) {
 		if err := cleanenv.ReadEnv(&cfg); err != nil {
 			return nil, err
 		}
-		slog.Info("Config loaded from environment variables only")
+		l.Info("config loaded from environment variables only")
 	} else {
-		slog.Info("Config loaded from file and environment variables")
+		l.Info("config loaded from file and environment variables")
 	}
 
 	return &cfg, nil

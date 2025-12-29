@@ -74,21 +74,20 @@ func (r *V1) createTask(c *gin.Context) {
 	}
 	requestID := c.GetString("request_id")
 
-	r.l.Info("начало создания задачи",
+	r.l.Info("creating task",
 		"filename", filename,
 		"size", contentLength,
 		"request_id", requestID,
 	)
 
-	//создание задачи
+	// создание задачи
 	taskID, err := r.uc.TaskLLMUC.CreateTask(ctx, c.Request.Body, filename, contentLength, requestID)
 	if err != nil {
 		r.handleError(c, err, "create_task")
 		return
 	}
 
-	// Success лог на границе
-	r.l.Info("задача создана",
+	r.l.Info("task created successfully",
 		"task_id", taskID,
 		"status", domain.TaskStatusPending,
 		"request_id", requestID,
