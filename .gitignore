@@ -1,3 +1,5 @@
 logs
 ./config.yaml
 ./.env
+gitea/mod
+bin
