@@ -49,12 +49,8 @@ COPY --from=builder /build/app .
 RUN useradd -m -u 1000 appuser
 USER appuser
 
-# Получаем порт через build argument (по умолчанию 8080)
-# ARG PORT=8080
-ARG SERVER_PORT=8080
-
+ENV SERVER_PORT=8080
 EXPOSE ${SERVER_PORT}
-ENV SERVER_PORT=${SERVER_PORT}
 
 # ============================================
 # Dev образ (использует config.yaml из проекта)
@@ -63,8 +59,8 @@ FROM base AS dev
 
 # В dev режиме используем config.yaml из директории проекта
 ARG CONFIG_FILE=config.yaml
-COPY --chown=appuser:appuser ${CONFIG_FILE} /app/config.yaml
-
+WORKDIR /app
+COPY --chown=appuser:appuser ${CONFIG_FILE} ./config.yaml
 CMD ["./app"]
 
 # ============================================
@@ -81,7 +77,8 @@ CMD ["./app"]
 # Финальный образ (по умолчанию dev)
 # ============================================
 FROM dev
-
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:${SERVER_PORT}/health || exit 1
 # Использование:
 # 
 # Dev режим (по умолчанию, использует config.yaml из проекта):

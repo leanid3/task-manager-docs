@@ -11,6 +11,8 @@
 .env.development
 .env.test
 .env.production
+Dockerfile
+docker-compose
 logs
 doc
 docs

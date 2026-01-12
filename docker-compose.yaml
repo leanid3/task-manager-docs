@@ -1,0 +1,243 @@
+############################################
+### Templates
+############################################
+x-database-template: &database-template
+  restart: unless-stopped
+  networks:
+    - document-flow-network
+
+x-migrate-template: &migrate-template
+  image: migrate/migrate:latest
+  user: "1000:1000"
+  restart: "no"
+  entrypoint: ["/bin/sh", "-c"]
+  command:
+    - "migrate -path=/migrations -database=$$DATABASE_URL up"
+  networks:
+    - document-flow-network
+
+x-broker-healthcheck: &broker-healthcheck
+  interval: 10s
+  timeout: 10s
+  retries: 5
+
+x-database-healthcheck: &database-healthcheck
+  test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+  interval: 5s
+  timeout: 5s
+  retries: 5
+
+services:
+  ############################################
+  ### Stateful services
+  ############################################
+  task-manager-database:
+    <<: *database-template
+    image: postgres:16
+    container_name: task-manager-database
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${TASK_MANAGER_POSTGRES_DB:-task_manager}
+    ports:
+      - "${TASK_MANAGER_POSTGRES_PORT:-5443}:5432"
+    volumes:
+      - task-manager-postgres_data:/var/lib/postgresql/data
+      # - ./database/migrations/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # command:
+    #   - postgres
+    #   - -c
+    #   - shared_preload_libraries=pg_cron
+    #   - -c
+    #   - cron.database_name=task_manager
+    #   - -c
+    #   - cron.log_run=false
+    healthcheck:
+      <<: *database-healthcheck
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: df-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_CLIENT_PORT:-2181}
+      ZOOKEEPER_TICK_TIME: ${ZOOKEEPER_TICK_TIME:-2000}
+    networks:
+      - document-flow-network
+    healthcheck:
+      <<: *broker-healthcheck
+      test: ["CMD-SHELL", "nc -z localhost $$ZOOKEEPER_CLIENT_PORT"]
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: df-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: ${KAFKA_BROKER_ID:-1}
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_CLIENT_PORT:-2181}
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:${KAFKA_EXTERNAL_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_OFFSETS_REPLICATION_FACTOR:-1}
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "${KAFKA_AUTO_CREATE_TOPICS:-true}"
+    ports:
+      - "${KAFKA_EXTERNAL_PORT:-9092}:9092"
+    networks:
+      - document-flow-network
+    healthcheck:
+      <<: *broker-healthcheck
+      test:
+        [
+          "CMD",
+          "kafka-broker-api-versions",
+          "--bootstrap-server",
+          "localhost:9092",
+        ]
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: df-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - document-flow-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ############################################
+  ### Init services
+  ############################################
+  df-minio-init:
+    image: minio/mc:latest
+    container_name: df-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb myminio/${MINIO_BUCKET:-documents} --ignore-existing;
+      exit 0;
+      "
+    networks:
+      - document-flow-network
+    restart: "no"
+
+  task-manager-migrate:
+    <<: *migrate-template
+    container_name: task-manager-migrate
+    depends_on:
+      task-manager-database:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${TASK_MANAGER_DATABASE_URL:-postgres://postgres:postgres@task-manager-database:5432/task_manager?sslmode=disable}
+    volumes:
+      - ./database/migrations:/migrations
+
+  ############################################
+  ### Stateless services (DEV MODE)
+  ############################################
+  task-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: app-task-manager
+    depends_on:
+      task-manager-database:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      df-minio-init:
+        condition: service_completed_successfully
+      task-manager-migrate:
+        condition: service_completed_successfully
+    # env_file:
+    #   - ./env/dev/task-manager.env
+    environment:
+      - CGO_ENABLED=0
+      - GOOS=linux
+      - GOARCH=amd64
+    working_dir: /app
+    volumes:
+      # Монтируем весь исходный код
+      # - .:/app
+      # Кэш Go модулей для быстрой сборки
+      # - go-task-manager-cache:/go/pkg/mod
+      # Логи для отладки
+      - ./logs:/app/logs
+    ports:
+      - "${TASK_MANAGER_HTTP_PORT:-8080}:8080"
+      - "${TASK_MANAGER_METRICS_PORT:-9090}:9090"
+      # Порт для удаленной отладки (delve)
+      # - "${TASK_MANAGER_DEBUG_PORT:-2345}:2345"
+    networks:
+      - document-flow-network
+    restart: unless-stopped
+    # Отключаем healthcheck в dev режиме для быстрого рестарта
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 40s
+
+  ############################################
+  ### UI services
+  ############################################
+  ui-container:
+    image: amir20/dozzle:latest
+    container_name: ui-container
+    ports:
+      - "${DOZZLE_PORT:-8888}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - document-flow-network
+
+  ui-database:
+    image: adminer:latest
+    container_name: ui-database
+    ports:
+      - "${ADMINER_PORT:-9099}:8080"
+    networks:
+      - document-flow-network
+
+  ui-kafka:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ui-kafka
+    ports:
+      - "${KAFKA_UI_PORT:-9100}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: ${KAFKA_CLUSTER_NAME:-platform}
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:${ZOOKEEPER_CLIENT_PORT:-2181}
+    networks:
+      - document-flow-network
+
+volumes:
+  minio_data:
+  task-manager-postgres_data:
+  llm-worker-postgres_data:
+  go-task-manager-cache:
+
+networks:
+  document-flow-network:
+    name: document-flow-network
+    driver: bridge
