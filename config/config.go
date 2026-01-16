@@ -4,6 +4,7 @@ import (
 	"app/pkg/logger"
 	"time"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
@@ -15,6 +16,7 @@ type Config struct {
 	Metrics  MetricsConfig  `mapstructure:"metrics" yaml:"metrics"`
 	Minio    MinioConfig    `mapstructure:"minio" yaml:"minio"`
 	Swagger  SwaggerConfig  `mapstructure:"swagger" yaml:"swagger"`
+	Tasks    []TaskConfig   `mapstructure:"tasks" yaml:"tasks"`  // Конфигурация для различных типов задач
 }
 
 type DatabaseConfig struct {
@@ -112,6 +114,19 @@ type MinioConfig struct {
 	Timeout   time.Duration `mapstructure:"Timeout" yaml:"Timeout" env:"MINIO_TIMEOUT"`
 }
 
+// TaskConfig - конфигурация для различных типов задач
+type TaskConfig struct {
+	Type         string        `mapstructure:"type" yaml:"type" validate:"required,oneof=llm parsing algorithms analyze"` // Тип задачи
+	Name         string        `mapstructure:"name" yaml:"name" validate:"required"`                                    // Имя задачи
+	Topic        string        `mapstructure:"topic" yaml:"topic" validate:"required"`                                  // Топик Kafka для задачи
+	Workers      int           `mapstructure:"workers" yaml:"workers" validate:"min=1,max=100"`                         // Количество воркеров
+	Timeout      time.Duration `mapstructure:"timeout" yaml:"timeout" validate:"min=1s"`                                // Таймаут выполнения задачи
+	MaxRetries   int           `mapstructure:"max_retries" yaml:"max_retries" validate:"min=0,max=10"`                  // Максимальное количество попыток
+	QueueSize    int           `mapstructure:"queue_size" yaml:"queue_size" validate:"min=1,max=10000"`                 // Размер очереди задач
+	StoragePath  string        `mapstructure:"storage_path" yaml:"storage_path"`                                        // Путь в хранилище для задач этого типа
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" default:"true"`                                   // Включена ли обработка задач этого типа
+}
+
 func Load(l logger.Interface) (*Config, error) {
 	var cfg Config
 
@@ -124,6 +139,12 @@ func Load(l logger.Interface) (*Config, error) {
 		l.Info("config loaded from environment variables only")
 	} else {
 		l.Info("config loaded from file and environment variables")
+	}
+
+	// Валидация конфигурации
+	validate := validator.New()
+	if err := validate.Struct(&cfg); err != nil {
+		return nil, err
 	}
 
 	return &cfg, nil

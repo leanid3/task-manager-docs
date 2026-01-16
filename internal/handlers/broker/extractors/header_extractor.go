@@ -6,6 +6,7 @@ import (
 	"app/pkg/logger"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/google/uuid"
@@ -40,7 +41,11 @@ func (e *HeaderExtractor) ExtractWorkerID(headers []kafka.Header) (*string, erro
 	for _, header := range headers {
 		if string(header.Key) == HeaderWorkerID {
 			val := string(header.Value)
-			return &val, nil
+			trimmedVal := strings.TrimSpace(val)
+			if trimmedVal == "" {
+				return nil, fmt.Errorf("worker_id header contains only whitespace")
+			}
+			return &trimmedVal, nil
 		}
 	}
 	return nil, fmt.Errorf("worker_id header not found")

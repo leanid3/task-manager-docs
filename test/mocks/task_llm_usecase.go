@@ -31,13 +31,13 @@ func (m *MockRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain
 	return args.Get(0).(*domain.Task), args.Error(1)
 }
 
-func (m *MockRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus) error {
-	args := m.Called(ctx, taskID, status)
+func (m *MockRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error {
+	args := m.Called(ctx, taskID, worker_id, status)
 	return args.Error(0)
 }
 
-func (m *MockRepository) UpdateWithResult(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus, result json.RawMessage) error {
-	args := m.Called(ctx, taskID, status, result)
+func (m *MockRepository) UpdateWithResult(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus, result json.RawMessage) error {
+	args := m.Called(ctx, taskID, worker_id, status, result)
 	return args.Error(0)
 }
 

@@ -86,3 +86,14 @@ minio:
 swagger:
   enabled: true
   path: "/swagger"
+
+tasks:
+  - type: "llm"
+    name: "LLM Processing Task"
+    topic: "tasks_llm"
+    workers: 5
+    timeout: 300s
+    max_retries: 3
+    queue_size: 1000
+    storage_path: "llm/"
+    enabled: true

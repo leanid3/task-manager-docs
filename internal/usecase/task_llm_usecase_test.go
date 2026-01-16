@@ -269,7 +269,7 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
-				repo.On("UpdateWithStatus", mock.Anything, mock.Anything, domain.TaskStatusProcessing).
+				repo.On("UpdateWithStatus", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusProcessing).
 					Return(nil)
 			},
 			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
@@ -293,7 +293,7 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
-				repo.On("UpdateWithResult", mock.Anything, mock.Anything, domain.TaskStatusCompleted, mock.Anything).
+				repo.On("UpdateWithResult", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusCompleted, mock.Anything).
 					Return(nil)
 			},
 			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
@@ -347,7 +347,7 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
-				repo.On("UpdateWithStatus", mock.Anything, mock.Anything, domain.TaskStatusProcessing).
+				repo.On("UpdateWithStatus", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusProcessing).
 					Return(fmt.Errorf("задача не найдена"))
 			},
 			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
@@ -375,7 +375,7 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
-				repo.On("UpdateWithResult", mock.Anything, mock.Anything, domain.TaskStatusCompleted, mock.Anything).
+				repo.On("UpdateWithResult", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusCompleted, mock.Anything).
 					Return(fmt.Errorf("задача не найдена"))
 			},
 			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {

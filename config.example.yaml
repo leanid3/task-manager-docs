@@ -88,3 +88,41 @@ swagger:
   enabled: true
   path: "/swagger"
 
+tasks:
+  - type: "llm"
+    name: "LLM Processing Task"
+    topic: "tasks_llm"
+    workers: 5
+    timeout: 300s
+    max_retries: 3
+    queue_size: 1000
+    storage_path: "llm/"
+    enabled: true
+  - type: "parsing"
+    name: "Document Parsing Task"
+    topic: "tasks_parsing"
+    workers: 3
+    timeout: 120s
+    max_retries: 2
+    queue_size: 500
+    storage_path: "parsing/"
+    enabled: true
+  - type: "algorithms"
+    name: "Algorithmic Processing Task"
+    topic: "tasks_algorithms"
+    workers: 2
+    timeout: 60s
+    max_retries: 1
+    queue_size: 200
+    storage_path: "algorithms/"
+    enabled: false
+  - type: "analyze"
+    name: "Data Analysis Task"
+    topic: "tasks_analyze"
+    workers: 4
+    timeout: 180s
+    max_retries: 2
+    queue_size: 800
+    storage_path: "analysis/"
+    enabled: true
+
