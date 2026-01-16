@@ -112,7 +112,14 @@ func main() {
 
 	// Usecases
 	taskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0], logMgr.Get("task"))
-	usecases := usecase.NewUseCases(taskLLMUC)
+
+	// Создаем фабрику процессоров задач
+	taskProcessorFactory := usecase.NewTaskProcessorFactory()
+
+	// Создаем универсальный usecase
+	unifiedTaskUC := usecase.NewUnifiedTaskUC(taskRepo, storageRepo, taskProcessorFactory, logMgr.Get("task"))
+
+	usecases := usecase.NewUseCases(taskLLMUC, unifiedTaskUC)
 
 	l.Info("application components initialized",
 		"task_repo", "created",
