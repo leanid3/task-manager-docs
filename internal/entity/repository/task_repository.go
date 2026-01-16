@@ -13,7 +13,7 @@ type Task interface {
 	GetByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error)
 	ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error)
 	// WithTx(tx database.DB) Task
-	UpdateWithStatus(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus) error
-	UpdateWithResult(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus, result json.RawMessage) error
+	UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error
+	UpdateWithResult(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus, result json.RawMessage) error
 	UpdateWithError(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus, errorMessage string) error
 }

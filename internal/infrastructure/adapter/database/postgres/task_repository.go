@@ -104,23 +104,22 @@ func (r *TaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain
 	return &task, nil
 }
 
-func (r *TaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus) error {
-	statusStr := string(status)
+func (r *TaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error {
 	query := `
-        UPDATE tasks 
-        SET status = $1::VARCHAR, 
-            started_at = CASE 
+        UPDATE tasks
+        SET status = $1::VARCHAR,
+            started_at = CASE
                 WHEN status = 'PENDING' AND $1::VARCHAR = 'PROCESSING' THEN GREATEST(NOW(), created_at)
                 WHEN started_at IS NULL AND $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN GREATEST(NOW(), created_at)
-                ELSE started_at 
+                ELSE started_at
             END,
-            completed_at = CASE 
+            completed_at = CASE
                 WHEN $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN GREATEST(NOW(), created_at, COALESCE(started_at, created_at))
-                ELSE completed_at 
-            END
-        WHERE task_id = $2
+                ELSE completed_at
+            END, worker_id = $2
+        WHERE task_id = $3
     `
-	result, err := r.db.Exec(ctx, query, statusStr, taskID)
+	result, err := r.db.Exec(ctx, query, status, worker_id, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to update task status: %w", err)
 	}
@@ -131,14 +130,14 @@ func (r *TaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID,
 
 }
 
-func (r *TaskRepository) UpdateWithResult(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus, result json.RawMessage) error {
+func (r *TaskRepository) UpdateWithResult(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus, result json.RawMessage) error {
 	query := `
-		UPDATE tasks 
-		SET result = $1, status = $2,  
+		UPDATE tasks
+		SET result = $1, status = $2, worker_id = $3,
 		    completed_at = GREATEST(NOW(), created_at, COALESCE(started_at, created_at))
-		WHERE task_id = $3 
+		WHERE task_id = $4
 	`
-	cmdTag, err := r.db.Exec(ctx, query, result, status, taskID)
+	cmdTag, err := r.db.Exec(ctx, query, result, status, worker_id, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to update task result: %w", err)
 	}
@@ -150,8 +149,8 @@ func (r *TaskRepository) UpdateWithResult(ctx context.Context, taskID uuid.UUID,
 
 func (r *TaskRepository) UpdateWithError(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus, errorMessage string) error {
 	query := `
-		UPDATE tasks 
-		SET error_message = $1, status = $2, 
+		UPDATE tasks
+		SET error_message = $1, status = $2,
 		    completed_at = GREATEST(NOW(), created_at, COALESCE(started_at, created_at))
 		WHERE task_id = $3
 	`
@@ -160,24 +159,6 @@ func (r *TaskRepository) UpdateWithError(ctx context.Context, taskID uuid.UUID, 
 	if err != nil {
 		return fmt.Errorf("failed to update task error: %w", err)
 	}
-	if result.RowsAffected() == 0 {
-		return fmt.Errorf("task not found: %s", taskID)
-	}
-	return nil
-}
-
-func (r *TaskRepository) UpdateWithWorker(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus, workerID string) error {
-	query := `
-        UPDATE tasks 
-        SET status = $1, worker_id = $2, started_at = NOW()
-        WHERE task_id = $3
-    `
-
-	result, err := r.db.Exec(ctx, query, status, workerID, taskID)
-	if err != nil {
-		return fmt.Errorf("failed to update task with worker: %w", err)
-	}
-
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("task not found: %s", taskID)
 	}

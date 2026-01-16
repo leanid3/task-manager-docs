@@ -78,9 +78,9 @@ CMD ["./app"]
 # ============================================
 FROM dev
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${SERVER_PORT}/health || exit 1
+    CMD curl -f http://localhost:${SERVER_PORT}/health || exit 1
 # Использование:
-# 
+#
 # Dev режим (по умолчанию, использует config.yaml из проекта):
 #   docker build -t task-manager:dev --target dev .
 #   docker-compose build task-manager  # использует target: dev из docker-compose.yaml

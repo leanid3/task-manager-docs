@@ -262,9 +262,8 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 		if task.Status == domain.TaskStatusProcessing {
 			return apperrors.New(apperrors.CodeTaskAlreadyProcessing, "task already processing")
 		}
-		return uc.taskRepo.UpdateWithStatus(ctx, evt.Key.TaskID, taskStatus)
+		return uc.taskRepo.UpdateWithStatus(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusProcessing)
 	case domain.TaskStatusCompleted:
-		//TODO заменить на кеш задач вместо хождения в базу
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
 			return apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
@@ -272,9 +271,8 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 		if task.Status == domain.TaskStatusCompleted {
 			return apperrors.New(apperrors.CodeTaskAlreadyCompleted, "task already completed")
 		}
-		return uc.taskRepo.UpdateWithResult(ctx, evt.Key.TaskID, domain.TaskStatusCompleted, evt.Value.Result)
+		return uc.taskRepo.UpdateWithResult(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusCompleted, evt.Value.Result)
 	case domain.TaskStatusFailed:
-		//TODO заменить на кеш задач вместо хождения в базу
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
 			return apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)

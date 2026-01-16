@@ -1,17 +1,17 @@
 logger:
   level: debug
-  format: json # color, json, text
-  app_path: "/app/logs/app.log"
-  health_path: "/app/logs/health.log"
-  http_path: "/app/logs/http.log"
-  kafka_path: "/app/logs/kafka.log"
-  minio_path: "/app/logs/minio.log"
-  task_path: "/app/logs/task.log"
-  s3_path: "/app/logs/s3.log"
-  max_size: 10        # максимальный размер файла в мегабайтах (0 = без ограничений)
-  max_files: 5        # максимальное количество файлов (0 = без ограничений)
+  format: text # color, json, text
+  app_path: "./logs/app.log"
+  health_path: "./logs/health.log"
+  http_path: "./logs/http.log"
+  kafka_path: "./logs/kafka.log"
+  minio_path: "./logs/minio.log"
+  task_path: "./logs/task.log"
+  s3_path: "./logs/s3.log"
+  max_size: 10 # максимальный размер файла в мегабайтах (0 = без ограничений)
+  max_files: 5 # максимальное количество файлов (0 = без ограничений)
   clear_on_start: true # очищать ли файл при старте приложения
-  mode: stdout #file, stdout
+  mode: file #file, stdout
 
 server:
   port: 8080
@@ -23,8 +23,8 @@ server:
   shutdown_timeout: 5s
 
 database:
-  host: "task-manager-database"
-  port: 5432
+  host: "localhost"
+  port: 5443
   user: "postgres"
   password: "postgres"
   database: "task_manager"
@@ -34,12 +34,11 @@ database:
   max_conn_idle_time: 30m
 
 broker:
-  bootstrap_service: "kafka:29092"
+  bootstrap_service: "localhost:9092"
   client_id: "task_manager_1_client"
   topics:
     - tasks_llm
     # - tasks_analysis
-  
 
   # Producer
   producer_acks: "-1"
@@ -50,7 +49,7 @@ broker:
   producer_linger_ms: 10
   producer_max_flight_requests: 5
   producer_timeout_ms: 30000
-  
+
   # Consumer
   consumer_group_id: "task_llm_group"
   consumer_auto_commit: true
@@ -58,13 +57,13 @@ broker:
   consumer_session_timeout_ms: 30000
   consumer_heartbeat_interval_ms: 10000
   consumer_max_poll_records: 500
-  
+
   # Security #В прод лучше заменить на SASL_PLAINTEXT и указать username и password
   security_protocol: "PLAINTEXT"
   sasl_mechanism: ""
   sasl_username: ""
   sasl_password: ""
-  
+
   # SSL
   ssl_certificate_verification: false
 
@@ -75,7 +74,7 @@ metrics:
   path: "/metrics"
 
 minio:
-  endpoint: "minio:9000"
+  endpoint: "localhost:9000"
   access_key: "minioadmin"
   secret_key: "minioadmin"
   bucket: "documents"
@@ -87,4 +86,3 @@ minio:
 swagger:
   enabled: true
   path: "/swagger"
-

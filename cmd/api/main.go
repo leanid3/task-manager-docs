@@ -3,6 +3,8 @@ package main
 import (
 	"app/config"
 	brokerhandlers "app/internal/handlers/broker"
+	"app/internal/handlers/broker/extractors"
+	workflowLlm "app/internal/handlers/broker/workflows/llm"
 	handlers "app/internal/handlers/restapi"
 	"app/internal/infrastructure/adapter/database/postgres"
 	"app/internal/infrastructure/adapter/storage/minio"
@@ -111,8 +113,8 @@ func main() {
 	// Usecases
 	taskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0], logMgr.Get("task"))
 	usecases := usecase.NewUseCases(taskLLMUC)
-	
-	l.Info("application components initialized", 
+
+	l.Info("application components initialized",
 		"task_repo", "created",
 		"storage_repo", "created",
 		"task_usecase", "created")
@@ -124,9 +126,18 @@ func main() {
 	}
 	l.Info("postgres health check passed")
 
-	//TODO расширить для нескольких типов tasks
-	kafkaHandler := brokerhandlers.NewKafkaMessageHandler(*usecases, logMgr.Get("kafka"))
+	//## Consumer
+	// 1. Создаем registry - маршрутизатор, estractor - парсер, общая валидатор
+	registry := brokerhandlers.NewRegistry(l)
+	extractor := extractors.NewHeaderExtractor(l)
+	baseValidator := brokerhandlers.NewBaseValidator(extractor)
 
+	// 2. Конкретные маршруты и валидиация
+	llmValidator := workflowLlm.NewTaskLLMValidator(baseValidator)
+	workflowLlm.Register(registry, llmValidator, usecases.TaskLLMUC, l)
+
+	//Создаем consumer
+	kafkaHandler := brokerhandlers.NewKafkaMessageHandler(registry, logMgr.Get("kafka"))
 	cons, err := kafka.NewConsumerWithHandler(ctx, kafkaHandler, cfg.Broker.Topics, kafka.ConsumerConfig{
 		BootstrapServers:     cfg.Broker.BootstrapService,
 		ClientID:             cfg.Broker.ClientID,
@@ -141,7 +152,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Запускаем CONSUMER в фоне
+	// Запускаем consumer в фоне
 	go func() {
 		l.Info("starting kafka consumer", "topics", cfg.Broker.Topics, "group_id", cfg.Broker.ConsumerGroupID)
 		if err := cons.Start(ctx); err != nil {
@@ -150,7 +161,7 @@ func main() {
 		l.Info("kafka consumer stopped")
 	}()
 
-	// HTTP сервер (главный поток)
+	//## HTTP сервер (главный поток)
 	httpServer := httpserver.New(logMgr.Get("app"), httpserver.Port(cfg.Server.Port), httpserver.ReadTimeout(cfg.Server.ReadTimeout))
 	handlers.NewRoutes(httpServer.Engine(), cfg, *usecases, logMgr.Get("http"))
 

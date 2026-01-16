@@ -1,126 +1,68 @@
 package broker
 
 import (
+	"strings"
+
 	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
-	"encoding/json"
-	"strconv"
-	"strings"
+	"app/internal/handlers/broker/extractors"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/google/uuid"
 )
 
-func validateTaskID(key []byte) (uuid.UUID, error) {
-	taskIDStr := strings.TrimSpace(string(key))
+// BaseValidator - валидирует общую часть контракта (Key + Headers)
+type BaseValidator struct {
+	extractor *extractors.HeaderExtractor
+}
+
+func NewBaseValidator(extractor *extractors.HeaderExtractor) *BaseValidator {
+	return &BaseValidator{extractor: extractor}
+}
+
+// ValidatedContract - результат валидации общей части
+type ValidatedContract struct {
+	domain.TaskContractKey
+	domain.TaskContractHeaders
+}
+
+func (v *BaseValidator) ValidateContract(msg *kafka.Message) (*ValidatedContract, error) {
+	// 1) Key: task_id (обязательный)
+	taskIDStr := strings.TrimSpace(string(msg.Key))
 	if taskIDStr == "" {
-		return uuid.Nil, apperrors.New(apperrors.CodeInvalidMessageFormat, "invalid task_id format")
+		return nil, apperrors.New(apperrors.CodeInvalidMessageFormat, "invalid task_id format")
 	}
+
 	taskID, err := uuid.Parse(taskIDStr)
 	if err != nil {
-		return uuid.Nil, apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "invalid task_id format", err)
+		return nil, apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "invalid task_id format", err)
 	}
-	return taskID, nil
-}
 
-func validateStatus(headers []kafka.Header) (int, error) {
-	var statusStr string
-	for _, header := range headers {
-		if string(header.Key) == "status" {
-			statusStr = decodeHeaderValue(header.Value)
-			break
-		}
-	}
-	if statusStr == "" {
-		return 0, apperrors.New(apperrors.CodeInvalidMessageFormat, "invalid task status format")
-	}
-	statusInt, err := strconv.Atoi(statusStr)
+	// 2) Headers: используем extractor для всех заголовков
+	headers, err := v.extractor.ExtractAll(msg.Headers)
 	if err != nil {
-		return 0, apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "invalid task status format", err)
-	}
-	_, ok := domain.TaskStatus("").FromKafkaCode(statusInt)
-	if !ok {
-		return 0, apperrors.New(apperrors.CodeInvalidMessageFormat, "invalid task status")
-	}
-	return statusInt, nil
-}
-
-// TODO нужен рефакторинг
-func parseTaskStatusHeaders(headers []kafka.Header) (domain.TaskStatus, string, *uuid.UUID, error) {
-	var status domain.TaskStatus
-	var workerID string
-	var traceID *uuid.UUID
-
-	for _, header := range headers {
-		switch string(header.Key) {
-		case "status":
-			statusStr := decodeHeaderValue(header.Value)
-			if statusStr == "" {
-				return "", "", nil, apperrors.New(apperrors.CodeInvalidMessageFormat, "invalid task status format")
-			}
-			statusInt, err := strconv.Atoi(statusStr)
-			if err != nil {
-				return "", "", nil, apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "invalid task status format", err)
-			}
-			var ok bool
-			status, ok = domain.TaskStatus("").FromKafkaCode(statusInt)
-			if !ok {
-				return "", "", nil, apperrors.New(apperrors.CodeInvalidMessageFormat, "invalid task status")
-			}
-		case "worker_id":
-			workerID = decodeHeaderValue(header.Value)
-		case "trace_id":
-			traceIDStr := decodeHeaderValue(header.Value)
-			if traceIDStr != "" {
-				id, err := uuid.Parse(traceIDStr)
-				if err != nil {
-					return "", "", nil, apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "invalid trace_id format", err)
-				}
-				traceID = &id
-			}
-		}
+		return nil, apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "failed to extract headers", err)
 	}
 
-	return status, workerID, traceID, nil
-}
-
-func ValidateTaskStatusLLM(msg *kafka.Message) (*domain.TaskLLMStatusEvent, error) {
-	// Валидация task_id
-	taskID, err := validateTaskID(msg.Key)
-	if err != nil {
-		return nil, err
+	// 3) Валидация статуса (должен быть валидным кодом)
+	if _, ok := domain.TaskStatus("").FromKafkaCode(headers.Status); !ok {
+		return nil, apperrors.New(apperrors.CodeInvalidMessageFormat, "invalid task status")
 	}
 
-	// Валидация статуса
-	statusInt, err := validateStatus(msg.Headers)
-	if err != nil {
-		return nil, err
+	// 4) worker_id - теперь обязательный
+	if headers.WorkerID == "" {
+		return nil, apperrors.New(apperrors.CodeInvalidMessageFormat, "worker_id is required")
 	}
 
-	// Валидация JSON
-	var value domain.TaskLLMStatusEventPayload
-	if len(msg.Value) > 0 {
-		if err := json.Unmarshal(msg.Value, &value); err != nil {
-			return nil, apperrors.Wrap(apperrors.CodeInvalidMessageFormat, "failed to unmarshal task status event", err)
-		}
+	// 5) trace_id - теперь обязательный
+	if headers.TraceID == nil {
+		return nil, apperrors.New(apperrors.CodeInvalidMessageFormat, "trace_id is required")
 	}
+	c := ValidatedContract{}
+	c.TaskID = taskID
+	c.TraceID = headers.TraceID
+	c.WorkerID = headers.WorkerID
+	c.Status = headers.Status
+	return &c, nil
 
-	// Парсинг заголовков
-	_, workerID, traceID, err := parseTaskStatusHeaders(msg.Headers)
-	if err != nil {
-		return nil, err
-	}
-
-	// Создание события
-	event := &domain.TaskLLMStatusEvent{
-		Key: domain.TaskContractKey{TaskID: taskID},
-		Headers: domain.TaskContractHeaders{
-			Status:   statusInt,
-			WorkerID: workerID,
-			TraceID:  traceID,
-		},
-		Value: value,
-	}
-
-	return event, nil
 }
