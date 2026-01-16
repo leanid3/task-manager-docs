@@ -18,6 +18,12 @@ type Interface interface {
 	Error(msg string, args ...interface{})
 	ErrorWithSkip(skip int, msg string, args ...interface{})
 	Fatal(msg string, args ...interface{})
+	
+	// Методы с поддержкой контекста для передачи корреляционных ID
+	InfoCtx(ctx context.Context, msg string, args ...interface{})
+	DebugCtx(ctx context.Context, msg string, args ...interface{})
+	WarnCtx(ctx context.Context, msg string, args ...interface{})
+	ErrorCtx(ctx context.Context, msg string, args ...interface{})
 }
 
 type Logger struct {
@@ -167,4 +173,91 @@ func (l *Logger) logWithSkip(ctx context.Context, level slog.Level, skip int, ms
 	}
 
 	_ = l.logger.Handler().Handle(ctx, r)
+}
+
+// Методы с поддержкой контекста
+func (l *Logger) InfoCtx(ctx context.Context, msg string, args ...interface{}) {
+	l.logWithContext(ctx, slog.LevelInfo, msg, args...)
+}
+
+func (l *Logger) DebugCtx(ctx context.Context, msg string, args ...interface{}) {
+	l.logWithContext(ctx, slog.LevelDebug, msg, args...)
+}
+
+func (l *Logger) WarnCtx(ctx context.Context, msg string, args ...interface{}) {
+	l.logWithContext(ctx, slog.LevelWarn, msg, args...)
+}
+
+func (l *Logger) ErrorCtx(ctx context.Context, msg string, args ...interface{}) {
+	l.logWithContext(ctx, slog.LevelError, msg, args...)
+}
+
+// Внутренний метод для логирования с контекстом
+func (l *Logger) logWithContext(ctx context.Context, level slog.Level, msg string, args ...interface{}) {
+	if !l.logger.Enabled(ctx, level) {
+		return
+	}
+
+	var pcs [1]uintptr
+	runtime.Callers(3, pcs[:]) // skip 3: Callers, logWithContext, и вызывающий метод
+
+	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
+
+	// Добавляем атрибуты из контекста
+	contextAttrs := extractContextAttributes(ctx)
+	r.AddAttrs(contextAttrs...)
+
+	// Конвертируем args в атрибуты
+	if len(args) > 0 {
+		attrs := make([]slog.Attr, 0, len(args)/2)
+		for i := 0; i < len(args)-1; i += 2 {
+			if key, ok := args[i].(string); ok {
+				attrs = append(attrs, slog.Any(key, args[i+1]))
+			}
+		}
+		r.AddAttrs(attrs...)
+	}
+
+	_ = l.logger.Handler().Handle(ctx, r)
+}
+
+// Ключи для контекста
+type contextKey string
+
+const (
+	RequestIDKey contextKey = "request_id"
+	TraceIDKey   contextKey = "trace_id"
+	TaskIDKey    contextKey = "task_id"
+	WorkerIDKey  contextKey = "worker_id"
+)
+
+// extractContextAttributes извлекает атрибуты из контекста
+func extractContextAttributes(ctx context.Context) []slog.Attr {
+	var attrs []slog.Attr
+
+	if reqID := ctx.Value(RequestIDKey); reqID != nil {
+		if reqIDStr, ok := reqID.(string); ok && reqIDStr != "" {
+			attrs = append(attrs, slog.String("request_id", reqIDStr))
+		}
+	}
+
+	if traceID := ctx.Value(TraceIDKey); traceID != nil {
+		if traceIDStr, ok := traceID.(string); ok && traceIDStr != "" {
+			attrs = append(attrs, slog.String("trace_id", traceIDStr))
+		}
+	}
+
+	if taskID := ctx.Value(TaskIDKey); taskID != nil {
+		if taskIDStr, ok := taskID.(string); ok && taskIDStr != "" {
+			attrs = append(attrs, slog.String("task_id", taskIDStr))
+		}
+	}
+
+	if workerID := ctx.Value(WorkerIDKey); workerID != nil {
+		if workerIDStr, ok := workerID.(string); ok && workerIDStr != "" {
+			attrs = append(attrs, slog.String("worker_id", workerIDStr))
+		}
+	}
+
+	return attrs
 }

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"time"
 
 	"app/pkg/logger"
@@ -14,13 +15,16 @@ func Logger(l logger.Interface) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		query := c.Request.URL.RawQuery
 
+		// Создаем контекст с request_id
+		ctx := context.WithValue(c.Request.Context(), logger.RequestIDKey, c.GetString("request_id"))
+		c.Request = c.Request.WithContext(ctx)
+
 		c.Next()
 
 		latency := time.Since(start)
 		statusCode := c.Writer.Status()
 
 		args := []interface{}{
-			"request_id", c.GetString("request_id"),
 			"method", c.Request.Method,
 			"path", path,
 			"status", statusCode,
@@ -34,7 +38,9 @@ func Logger(l logger.Interface) gin.HandlerFunc {
 		}
 
 		if statusCode < 400 {
-			l.Info("request completed", args...)
+			l.InfoCtx(c.Request.Context(), "request completed", args...)
+		} else {
+			l.WarnCtx(c.Request.Context(), "request completed with warning", args...)
 		}
 	}
 }

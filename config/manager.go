@@ -4,7 +4,6 @@ import (
 	"app/pkg/logger"
 	"context"
 	"sync"
-	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
