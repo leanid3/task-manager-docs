@@ -14,6 +14,7 @@ import (
 	"app/pkg/kafka"
 	"app/pkg/logger"
 	pkgminio "app/pkg/minio"
+	"app/pkg/limits"
 	"context"
 	"os"
 	"os/signal"
@@ -109,6 +110,11 @@ func main() {
 	// Репозитории
 	taskRepo := postgres.NewTaskRepository(postgresConnector.Pool())
 	storageRepo := minio.NewMinioAdapter(minioConnector, logMgr.Get("minio"))
+
+
+	// Создаем ограничитель ресурсов
+	resourceLimiter := limits.NewSemaphoreResourceLimiter()
+	resourceLimiter.SetLimit("tasks", 100) // Максимум 100 одновременных задач
 
 	// Usecases
 	taskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0], logMgr.Get("task"))

@@ -158,7 +158,7 @@ func NewStandardErrorHandler(classifier ErrorClassifier) *StandardErrorHandler {
 
 // Handle обрабатывает ошибку
 func (seh *StandardErrorHandler) Handle(ctx context.Context, taskID uuid.UUID, err error) error {
-	errType, severity := seh.classifier.Classify(err)
+	_, severity := seh.classifier.Classify(err)
 
 	// Логируем ошибку
 	seh.LogError(ctx, taskID, err, severity)

@@ -1,0 +1,453 @@
+package minio
+
+import (
+	apperrors "app/internal/entity/errors"
+	"app/pkg/logger"
+	pkgminio "app/pkg/minio"
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
+
+// MockConnector - мок для pkgminio.Connector
+type MockConnector struct {
+	mock.Mock
+}
+
+func (m *MockConnector) Client() *minio.Client {
+	args := m.Called()
+	return args.Get(0).(*minio.Client)
+}
+
+func (m *MockConnector) BucketName() string {
+	args := m.Called()
+	return args.String(0)
+}
+
+func (m *MockConnector) Health(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+// MockMinioClient - мок для minio.Client
+type MockMinioClient struct {
+	mock.Mock
+}
+
+func (m *MockMinioClient) PutObject(ctx context.Context, bucketName, objectName string, reader io.Reader, objectSize int64, opts minio.PutObjectOptions) (minio.UploadInfo, error) {
+	args := m.Called(ctx, bucketName, objectName, reader, objectSize, opts)
+	if args.Get(0) != nil {
+		return args.Get(0).(minio.UploadInfo), args.Error(1)
+	}
+	return minio.UploadInfo{}, args.Error(1)
+}
+
+func (m *MockMinioClient) RemoveObject(ctx context.Context, bucketName, objectName string, opts minio.RemoveObjectOptions) error {
+	args := m.Called(ctx, bucketName, objectName, opts)
+	return args.Error(0)
+}
+
+func (m *MockMinioClient) StatObject(ctx context.Context, bucketName, objectName string, opts minio.StatObjectOptions) (minio.ObjectInfo, error) {
+	args := m.Called(ctx, bucketName, objectName, opts)
+	if args.Get(0) != nil {
+		return args.Get(0).(minio.ObjectInfo), args.Error(1)
+	}
+	return minio.ObjectInfo{}, args.Error(1)
+}
+
+func (m *MockMinioClient) ListObjects(ctx context.Context, bucketName, prefix string, opts minio.ListObjectsOptions) <-chan minio.ObjectInfo {
+	args := m.Called(ctx, bucketName, prefix, opts)
+	return args.Get(0).(<-chan minio.ObjectInfo)
+}
+
+func (m *MockMinioClient) ToErrorResponse(err error) minio.ErrorResponse {
+	args := m.Called(err)
+	return args.Get(0).(minio.ErrorResponse)
+}
+
+func TestNewMinioAdapter(t *testing.T) {
+	mockConnector := new(MockConnector)
+	mockClient := &minio.Client{}
+	mockLogger := &logger.Logger{}
+
+	mockConnector.On("Client").Return(mockClient)
+	mockConnector.On("BucketName").Return("test-bucket")
+
+	adapter := NewMinioAdapter(mockConnector, mockLogger)
+
+	assert.Equal(t, mockConnector, adapter.connector)
+	assert.Equal(t, mockClient, adapter.client)
+	assert.Equal(t, "test-bucket", adapter.bucketName)
+	assert.Equal(t, mockLogger, adapter.l)
+
+	mockConnector.AssertExpectations(t)
+}
+
+func TestMinioAdapterUploadStream(t *testing.T) {
+	tests := []struct {
+		name          string
+		objectName    string
+		reader        io.Reader
+		objectSize    int64
+		opts          pkgminio.UploadOptions
+		setupMocks    func(*MockMinioClient)
+		expectedError bool
+	}{
+		{
+			name:       "successful upload",
+			objectName: "test/file.txt",
+			reader:     bytes.NewReader([]byte("test content")),
+			objectSize: 12,
+			opts: pkgminio.UploadOptions{
+				ContentType:  "text/plain",
+				Metadata:     map[string]string{"key": "value"},
+				CacheControl: "no-cache",
+			},
+			setupMocks: func(client *MockMinioClient) {
+				client.On("PutObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("*bytes.Reader"),
+					int64(12),
+					mock.AnythingOfType("minio.PutObjectOptions")).
+					Return(minio.UploadInfo{
+						Size: 12,
+						ETag: "test-etag",
+					}, nil)
+			},
+			expectedError: false,
+		},
+		{
+			name:          "upload error",
+			objectName:    "test/file.txt",
+			reader:        bytes.NewReader([]byte("test content")),
+			objectSize:    12,
+			opts:          pkgminio.UploadOptions{},
+			setupMocks:    func(client *MockMinioClient) {
+				client.On("PutObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("*bytes.Reader"),
+					int64(12),
+					mock.AnythingOfType("minio.PutObjectOptions")).
+					Return(minio.UploadInfo{}, errors.New("upload failed"))
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockConnector := new(MockConnector)
+			mockClient := new(MockMinioClient)
+			mockLogger := &logger.Logger{}
+
+			mockConnector.On("Client").Return(mockClient)
+			mockConnector.On("BucketName").Return("test-bucket")
+
+			tt.setupMocks(mockClient)
+
+			adapter := NewMinioAdapter(mockConnector, mockLogger)
+			result, err := adapter.UploadStream(context.Background(), tt.objectName, tt.reader, tt.objectSize, tt.opts)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+
+			mockConnector.AssertExpectations(t)
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMinioAdapterDeleteObject(t *testing.T) {
+	tests := []struct {
+		name          string
+		objectName    string
+		setupMocks    func(*MockMinioClient)
+		expectedError bool
+	}{
+		{
+			name:       "successful deletion",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("RemoveObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.RemoveObjectOptions")).
+					Return(nil)
+			},
+			expectedError: false,
+		},
+		{
+			name:       "deletion error",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("RemoveObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.RemoveObjectOptions")).
+					Return(errors.New("deletion failed"))
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockConnector := new(MockConnector)
+			mockClient := new(MockMinioClient)
+			mockLogger := &logger.Logger{}
+
+			mockConnector.On("Client").Return(mockClient)
+			mockConnector.On("BucketName").Return("test-bucket")
+
+			tt.setupMocks(mockClient)
+
+			adapter := NewMinioAdapter(mockConnector, mockLogger)
+			err := adapter.DeleteObject(context.Background(), tt.objectName)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockConnector.AssertExpectations(t)
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMinioAdapterGetObjectMetadata(t *testing.T) {
+	tests := []struct {
+		name          string
+		objectName    string
+		setupMocks    func(*MockMinioClient)
+		expectedError bool
+	}{
+		{
+			name:       "successful metadata retrieval",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("StatObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.StatObjectOptions")).
+					Return(minio.ObjectInfo{
+						Key:          "test/file.txt",
+						Size:         12,
+						ETag:         "test-etag",
+						ContentType:  "text/plain",
+						UserMetadata: map[string]string{"key": "value"},
+					}, nil)
+			},
+			expectedError: false,
+		},
+		{
+			name:       "file not found",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("StatObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.StatObjectOptions")).
+					Return(minio.ObjectInfo{}, errors.New("not found"))
+
+				client.On("ToErrorResponse", mock.AnythingOfType("*errors.errorString")).
+					Return(minio.ErrorResponse{Code: "NoSuchKey"})
+			},
+			expectedError: true,
+		},
+		{
+			name:       "other storage error",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("StatObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.StatObjectOptions")).
+					Return(minio.ObjectInfo{}, errors.New("storage error"))
+
+				client.On("ToErrorResponse", mock.AnythingOfType("*errors.errorString")).
+					Return(minio.ErrorResponse{Code: "OtherError"})
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockConnector := new(MockConnector)
+			mockClient := new(MockMinioClient)
+			mockLogger := &logger.Logger{}
+
+			mockConnector.On("Client").Return(mockClient)
+			mockConnector.On("BucketName").Return("test-bucket")
+
+			tt.setupMocks(mockClient)
+
+			adapter := NewMinioAdapter(mockConnector, mockLogger)
+			result, err := adapter.GetObjectMetadata(context.Background(), tt.objectName)
+
+			if tt.expectedError {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+
+				// Check if it's the expected error type
+				if appErr, ok := apperrors.IsAppError(err); ok {
+					if appErr.Code == apperrors.CodeFileNotFound {
+						assert.Equal(t, apperrors.CodeFileNotFound, appErr.Code)
+					}
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, result)
+			}
+
+			mockConnector.AssertExpectations(t)
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMinioAdapterObjectExists(t *testing.T) {
+	tests := []struct {
+		name           string
+		objectName     string
+		setupMocks     func(*MockMinioClient)
+		expectedExists bool
+		expectedError  bool
+	}{
+		{
+			name:       "object exists",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("StatObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.StatObjectOptions")).
+					Return(minio.ObjectInfo{}, nil)
+			},
+			expectedExists: true,
+			expectedError:  false,
+		},
+		{
+			name:       "object does not exist",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("StatObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.StatObjectOptions")).
+					Return(minio.ObjectInfo{}, errors.New("not found"))
+
+				client.On("ToErrorResponse", mock.AnythingOfType("*errors.errorString")).
+					Return(minio.ErrorResponse{Code: "NoSuchKey"})
+			},
+			expectedExists: false,
+			expectedError:  false,
+		},
+		{
+			name:       "other error",
+			objectName: "test/file.txt",
+			setupMocks: func(client *MockMinioClient) {
+				client.On("StatObject",
+					mock.Anything,
+					"test-bucket",
+					"test/file.txt",
+					mock.AnythingOfType("minio.StatObjectOptions")).
+					Return(minio.ObjectInfo{}, errors.New("storage error"))
+
+				client.On("ToErrorResponse", mock.AnythingOfType("*errors.errorString")).
+					Return(minio.ErrorResponse{Code: "OtherError"})
+			},
+			expectedExists: false,
+			expectedError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockConnector := new(MockConnector)
+			mockClient := new(MockMinioClient)
+			mockLogger := &logger.Logger{}
+
+			mockConnector.On("Client").Return(mockClient)
+			mockConnector.On("BucketName").Return("test-bucket")
+
+			tt.setupMocks(mockClient)
+
+			adapter := NewMinioAdapter(mockConnector, mockLogger)
+			exists, err := adapter.ObjectExists(context.Background(), tt.objectName)
+
+			assert.Equal(t, tt.expectedExists, exists)
+			if tt.expectedError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			mockConnector.AssertExpectations(t)
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestMinioAdapterGenerateStoragePath(t *testing.T) {
+	mockConnector := new(MockConnector)
+	mockClient := &minio.Client{}
+	mockLogger := &logger.Logger{}
+
+	mockConnector.On("Client").Return(mockClient)
+	mockConnector.On("BucketName").Return("test-bucket")
+
+	adapter := NewMinioAdapter(mockConnector, mockLogger)
+
+	taskID := uuid.New()
+	filename := "document.pdf"
+
+	expectedPath := "test-bucket/" + taskID.String() + "/" + filename
+	actualPath := adapter.GenerateStoragePath(taskID, filename)
+
+	assert.Equal(t, expectedPath, actualPath)
+
+	mockConnector.AssertExpectations(t)
+}
+
+func TestMinioAdapterBucketName(t *testing.T) {
+	mockConnector := new(MockConnector)
+	mockClient := &minio.Client{}
+	mockLogger := &logger.Logger{}
+
+	mockConnector.On("Client").Return(mockClient)
+	mockConnector.On("BucketName").Return("test-bucket")
+
+	adapter := NewMinioAdapter(mockConnector, mockLogger)
+
+	bucketName := adapter.BucketName()
+
+	assert.Equal(t, "test-bucket", bucketName)
+
+	mockConnector.AssertExpectations(t)
+}

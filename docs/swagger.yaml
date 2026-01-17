@@ -1,17 +1,19 @@
 definitions:
-  TaskStatus:
+  app_internal_entity_domain.TaskStatus:
     enum:
     - PENDING
     - PROCESSING
     - COMPLETED
     - FAILED
+    - CANCELLED
     type: string
     x-enum-varnames:
     - TaskStatusPending
     - TaskStatusProcessing
     - TaskStatusCompleted
     - TaskStatusFailed
-  ErrorResponse:
+    - TaskStatusCancelled
+  app_pkg_response.ErrorResponse:
     properties:
       code:
         type: string
@@ -25,38 +27,39 @@ definitions:
       timestamp:
         type: string
     type: object
-  CreateTaskResponse:
+  internal_handlers_restapi_v1.CreateTaskResponse:
     properties:
-      request_id:
-        type: string
       status:
-        $ref: '#/definitions/TaskStatus'
+        $ref: '#/definitions/app_internal_entity_domain.TaskStatus'
       task_id:
         type: string
     type: object
-  GetTaskResponse:
+  internal_handlers_restapi_v1.GetTaskResponse:
     properties:
+      error_message:
+        type: string
       status:
-        $ref: '#/definitions/TaskStatus'
+        $ref: '#/definitions/app_internal_entity_domain.TaskStatus'
       task_id:
         type: string
       task_results:
-        additionalProperties: true
-        type: object
+        items:
+          type: integer
+        type: array
     type: object
-  SwaggerCreateTaskSuccess:
+  internal_handlers_restapi_v1.SwaggerCreateTaskSuccess:
     properties:
       data:
-        $ref: '#/definitions/CreateTaskResponse'
+        $ref: '#/definitions/internal_handlers_restapi_v1.CreateTaskResponse'
       request_id:
         type: string
       timestamp:
         type: string
     type: object
-  SwaggerGetTaskSuccess:
+  internal_handlers_restapi_v1.SwaggerGetTaskSuccess:
     properties:
       data:
-        $ref: '#/definitions/GetTaskResponse'
+        $ref: '#/definitions/internal_handlers_restapi_v1.GetTaskResponse'
       request_id:
         type: string
       timestamp:
@@ -94,15 +97,15 @@ paths:
         "202":
           description: Задача успешно создана
           schema:
-            $ref: '#/definitions/SwaggerCreateTaskSuccess'
+            $ref: '#/definitions/internal_handlers_restapi_v1.SwaggerCreateTaskSuccess'
         "400":
           description: Неверный формат запроса
           schema:
-            $ref: '#/definitions/ErrorResponse'
+            $ref: '#/definitions/app_pkg_response.ErrorResponse'
         "500":
           description: Ошибка при создании задачи
           schema:
-            $ref: '#/definitions/ErrorResponse'
+            $ref: '#/definitions/app_pkg_response.ErrorResponse'
       summary: Создать задачу обработки файла (streaming upload)
       tags:
       - tasks
@@ -120,19 +123,19 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/SwaggerGetTaskSuccess'
+            $ref: '#/definitions/internal_handlers_restapi_v1.SwaggerGetTaskSuccess'
         "400":
           description: Bad Request
           schema:
-            $ref: '#/definitions/ErrorResponse'
+            $ref: '#/definitions/app_pkg_response.ErrorResponse'
         "404":
           description: Not Found
           schema:
-            $ref: '#/definitions/ErrorResponse'
+            $ref: '#/definitions/app_pkg_response.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
-            $ref: '#/definitions/ErrorResponse'
+            $ref: '#/definitions/app_pkg_response.ErrorResponse'
       tags:
       - tasks
 swagger: "2.0"

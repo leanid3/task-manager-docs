@@ -92,7 +92,7 @@ type TransactionCoordinator interface {
 	// ExecuteInTransaction выполняет функцию в транзакции
 	ExecuteInTransaction(ctx context.Context, fn func(ctx context.Context) error) error
 	// ExecuteInTransactionWithResult выполняет функцию в транзакции с возвратом результата
-	ExecuteInTransactionWithResult[T any](ctx context.Context, fn func(ctx context.Context) (T, error)) (T, error)
+	ExecuteInTransactionWithResult(ctx context.Context, fn func(ctx context.Context) (interface{}, error)) (interface{}, error)
 }
 
 // KafkaTransactionCoordinator реализация координатора транзакций для Kafka
@@ -138,8 +138,8 @@ func (ktc *KafkaTransactionCoordinator) ExecuteInTransaction(ctx context.Context
 }
 
 // ExecuteInTransactionWithResult выполняет функцию в транзакции с возвратом результата
-func (ktc *KafkaTransactionCoordinator) ExecuteInTransactionWithResult[T any](ctx context.Context, fn func(ctx context.Context) (T, error)) (T, error) {
-	var result T
+func (ktc *KafkaTransactionCoordinator) ExecuteInTransactionWithResult(ctx context.Context, fn func(ctx context.Context) (interface{}, error)) (interface{}, error) {
+	var result interface{}
 
 	err := ktc.ExecuteInTransaction(ctx, func(ctx context.Context) error {
 		res, err := fn(ctx)
