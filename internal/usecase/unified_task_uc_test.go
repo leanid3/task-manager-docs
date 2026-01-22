@@ -2,13 +2,11 @@ package usecase
 
 import (
 	"app/internal/entity/domain"
-	"app/pkg/logger"
 	"app/pkg/minio"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
-	"os"
 	"testing"
 	"time"
 
@@ -191,11 +189,9 @@ func TestUnifiedTaskUC_CreateTask(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockTaskRepository)
 			mockStorageRepo := new(MockStorageRepository)
-			mockLogger := logger.New(os.Stdout, "info", "text") // Create a proper logger instance
-
 			tt.setupMocks(mockRepo, mockStorageRepo)
 
-			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, nil, mockLogger)
+			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, nil)
 
 			taskID, err := uc.CreateTask(context.Background(), tt.input)
 
@@ -244,11 +240,9 @@ func TestUnifiedTaskUC_GetTaskByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockTaskRepository)
 			mockStorageRepo := new(MockStorageRepository)
-			mockLogger := logger.New(os.Stdout, "info", "text")
-
 			tt.setupMocks(mockRepo, mockStorageRepo)
 
-			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, nil, mockLogger)
+			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, nil)
 
 			task, err := uc.GetTaskByID(context.Background(), tt.taskID)
 
@@ -376,11 +370,9 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockTaskRepository)
 			mockStorageRepo := new(MockStorageRepository)
-			mockLogger := logger.New(os.Stdout, "info", "text")
-
 			tt.setupMocks(mockRepo, mockStorageRepo)
 
-			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, nil, mockLogger)
+			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, nil)
 
 			err := uc.UpdateTaskStatus(context.Background(), tt.event)
 
@@ -501,11 +493,9 @@ func TestUnifiedTaskUC_ProcessTask(t *testing.T) {
 			mockStorageRepo := new(MockStorageRepository)
 			mockFactory := new(MockTaskProcessorFactory)
 			mockProcessor := new(MockTaskProcessor)
-			mockLogger := logger.New(os.Stdout, "info", "text")
-
 			tt.setupMocks(mockRepo, mockStorageRepo, mockFactory, mockProcessor)
 
-			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, mockFactory, mockLogger)
+			uc := NewUnifiedTaskUC(mockRepo, mockStorageRepo, mockFactory)
 
 			err := uc.ProcessTask(context.Background(), tt.taskID)
 

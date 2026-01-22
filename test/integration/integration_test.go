@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"os"
 	"testing"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"app/pkg/deduplication"
 	"app/pkg/errors"
 	"app/pkg/limits"
-	"app/pkg/logger"
 	"app/pkg/validation"
 	pkgminio "app/pkg/minio"
 
@@ -130,8 +128,7 @@ func TestUnifiedTaskIntegration(t *testing.T) {
 	taskProcessorFactory := usecase.NewTaskProcessorFactory()
 
 	// Создаем универсальный usecase
-	testLogger := logger.New(os.Stdout, "debug", "text")
-	unifiedTaskUC := usecase.NewUnifiedTaskUC(mockTaskRepo, mockStorageRepo, taskProcessorFactory, testLogger)
+	unifiedTaskUC := usecase.NewUnifiedTaskUC(mockTaskRepo, mockStorageRepo, taskProcessorFactory)
 
 	// Подготовка тестовых данных
 	taskID := uuid.New()

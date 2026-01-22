@@ -148,6 +148,7 @@ services:
       DATABASE_URL: ${TASK_MANAGER_DATABASE_URL:-postgres://postgres:postgres@task-manager-database:5432/task_manager?sslmode=disable}
     volumes:
       - ./database/migrations:/migrations
+      - ./logs:/app/logs
 
   ############################################
   ### Stateless services (DEV MODE)

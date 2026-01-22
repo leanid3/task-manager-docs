@@ -74,9 +74,8 @@ func TestTaskUCIntegrationCreateTask(t *testing.T) {
 	producer := setupKafkaProducer(t, kafkaBootstrapServers)
 	defer producer.Close()
 
-	// Создаем TaskUC с реальными зависимостями
-	l := mocks.NewMockLogger()
-	uc := NewTaskLLMUC(taskRepo, producer, storageRepo, "tasks_llm", l)
+	// Создаем TaskUC
+	uc := NewTaskLLMUC(taskRepo, producer, storageRepo, "tasks_llm")
 
 	t.Run("CreateTask success", func(t *testing.T) {
 		filename := "test.pdf"
@@ -193,9 +192,8 @@ func TestTaskUCIntegrationUpdateTaskStatus(t *testing.T) {
 	producer := setupKafkaProducer(t, kafkaBootstrapServers)
 	defer producer.Close()
 
-	// Создаем TaskUC с реальными зависимостями
-	l := mocks.NewMockLogger()
-	uc := NewTaskLLMUC(taskRepo, producer, storageRepo, "tasks_llm", l)
+	// Создаем TaskUC
+	uc := NewTaskLLMUC(taskRepo, producer, storageRepo, "tasks_llm")
 
 	t.Run("UpdateTaskStatus success", func(t *testing.T) {
 		taskID, err := uc.CreateTask(ctx, bytes.NewBufferString("data"), "test.pdf", 1, "req-123")

@@ -294,7 +294,7 @@ func TestTaskRepositoryUpdateStatusCompletedSetsTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act: Обновляем статус на COMPLETED
-	err = repo.UpdateWithStatus(ctx, taskID, worker_id, domain.TaskStatusProcessing)
+	err = repo.UpdateWithStatus(ctx, taskID, worker_id, domain.TaskStatusCompleted)
 
 	// Assert
 	require.NoError(t, err)

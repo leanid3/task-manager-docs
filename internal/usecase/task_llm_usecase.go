@@ -5,8 +5,6 @@ import (
 	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
 	"app/internal/entity/repository"
-	"app/pkg/logger"
-	"app/pkg/metrics"
 	pkgminio "app/pkg/minio"
 	"context"
 	"encoding/json"
@@ -29,16 +27,14 @@ type TaskLLMUC struct {
 	producer    broker.Producer
 	storageRepo repository.Storage
 	topic       string
-	l           logger.Interface
 }
 
-func NewTaskLLMUC(taskRepo repository.Task, producer broker.Producer, storageRepo repository.Storage, topic string, l logger.Interface) *TaskLLMUC {
+func NewTaskLLMUC(taskRepo repository.Task, producer broker.Producer, storageRepo repository.Storage, topic string) *TaskLLMUC {
 	return &TaskLLMUC{
 		taskRepo:    taskRepo,
 		producer:    producer,
 		storageRepo: storageRepo,
 		topic:       topic,
-		l:           l,
 	}
 }
 
@@ -50,7 +46,6 @@ func (uc *TaskLLMUC) CreateTask(
 	filesize int64,
 	requestID string,
 ) (uuid.UUID, error) {
-	start := time.Now()
 	if reader == nil {
 		return uuid.Nil, apperrors.New(
 			apperrors.CodeValidationFailed,
@@ -116,159 +111,82 @@ func (uc *TaskLLMUC) CreateTask(
 		ContentType: domain.ContentTypeProtocol,
 	}
 
-	uc.l.Info("uploading file to storage",
-		"task_id", taskID,
-		"storage_path", storagePath,
-		"size", filesize,
-		"filename", filename,
-		"request_id", requestID,
-	)
-
-	// Storage - загрузка файла в хранилище
-	if _, err := uc.storageRepo.UploadStream(ctx, storagePath, reader, filesize, opts); err != nil {
-		uc.l.Error("failed to upload file to storage",
-			"error", err,
-			"task_id", taskID,
-			"storage_path", storagePath,
-			"filename", filename,
-			"request_id", requestID,
-		)
-
-		// Регистрируем метрики ошибки
-		metrics.IncTasksTotal("llm", "error")
-
+	// Загружаем файл в хранилище
+	_, err = uc.storageRepo.UploadStream(ctx, storagePath, reader, filesize, opts)
+	if err != nil {
 		return uuid.Nil, apperrors.Wrap(
 			apperrors.CodeStorageError,
-			"не удалось загрузить файл в хранилище.",
+			"failed to upload file to storage",
 			err,
-		).WithDetails(map[string]interface{}{
-			"task_id":      taskID.String(),
-			"storage_path": storagePath,
-		}).WithStatus(http.StatusInternalServerError)
+		).WithStatus(http.StatusInternalServerError)
 	}
-	// Удаление файла из хранилища в случае ошибки загрузки
-	needsCleanup := true
-	defer func() {
-		if needsCleanup {
-			if err := uc.storageRepo.DeleteObject(context.Background(), storagePath); err != nil {
-				uc.l.Error("failed to cleanup storage after error",
-					"error", err,
-					"storage_path", storagePath,
-					"task_id", taskID,
-					"request_id", requestID,
-				)
-			}
-		}
-	}()
 
-	// Database - создание задачи в базе данных
+	// Сохраняем задачу в базе данных
 	if err := uc.taskRepo.Create(ctx, &taskLLM.Task); err != nil {
-		uc.l.Error("failed to create task in database",
-			"error", err,
-			"task_id", taskID,
-			"request_id", requestID,
-		)
-
-		// Регистрируем метрики ошибки
-		metrics.IncTasksTotal("llm", "error")
-
+		// Если не удалось сохранить задачу в БД, удаляем загруженный файл
+		uc.storageRepo.DeleteObject(ctx, storagePath) // игнорируем ошибку удаления
 		return uuid.Nil, apperrors.Wrap(
 			apperrors.CodeDatabaseError,
-			"не удалось создать задачу в базе данных",
+			"failed to create task in database",
 			err,
-		).WithDetails(map[string]interface{}{
-			"task_id": taskID.String(),
-		})
+		).WithStatus(http.StatusInternalServerError)
 	}
 
-	cmd := domain.NewTaskLLMCommand(taskLLM)
-	headers := cmd.Headers.ToMap()
-	if err := uc.producer.Send(ctx, uc.topic, taskID.String(), headers, cmd.Value); err != nil {
-		uc.l.Error("failed to publish task to queue",
-			"error", err,
-			"task_id", taskID,
-			"topic", uc.topic,
-			"request_id", requestID,
-		)
+	// Отправляем задачу в очередь
+	taskData, err := json.Marshal(taskLLM)
+	if err != nil {
+		return uuid.Nil, apperrors.Wrap(
+			apperrors.CodeInternalError,
+			"failed to serialize task",
+			err,
+		).WithStatus(http.StatusInternalServerError)
+	}
 
+	// Подготовим заголовки для отправки
+	headers := map[string]string{
+		"trace_id":   traceID.String(),
+		"request_id": requestID,
+	}
+
+	if err := uc.producer.Send(ctx, uc.topic, taskID.String(), headers, taskData); err != nil {
+		// Если не удалось отправить задачу в очередь, обновляем статус задачи на FAILED
 		if updateErr := uc.taskRepo.UpdateWithError(ctx, taskID, domain.TaskStatusFailed, err.Error()); updateErr != nil {
-			uc.l.Error("failed to update task with error status",
-				"error", updateErr,
-				"task_id", taskID,
-				"original_error", err.Error(),
-			)
+			// Логируем ошибку обновления статуса, но не возвращаем её как основную
 		}
 
-		// Регистрируем метрики ошибки
-		metrics.IncTasksTotal("llm", "error")
+		// Также удаляем файл из хранилища, так как задача не будет обработана
+		if deleteErr := uc.storageRepo.DeleteObject(ctx, storagePath); deleteErr != nil {
+			// Логируем ошибку удаления, но не возвращаем её как основную
+		}
 
 		return uuid.Nil, apperrors.Wrap(
 			apperrors.CodeKafkaError,
-			"failed to publish task to queue",
+			"failed to send task to broker",
 			err,
-		).WithDetails(map[string]interface{}{
-			"task_id": taskID.String(),
-			"topic":   uc.topic,
-		})
+		).WithStatus(http.StatusInternalServerError)
 	}
-
-	uc.l.Info("task created and published successfully",
-		"task_id", taskID,
-		"status", domain.TaskStatusPending,
-		"topic", uc.topic,
-		"request_id", requestID,
-	)
-
-	// Регистрируем успешное создание задачи
-	duration := time.Since(start).Seconds()
-	metrics.IncTasksTotal("llm", "success")
-	metrics.ObserveTaskProcessingDuration("llm", "success", duration)
-
-	// Удаление файла из хранилища в случае успешного создания задачи не требуется
-	needsCleanup = false
 
 	return taskID, nil
 }
 
 // GetTaskByID - get task by ID
 func (uc *TaskLLMUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
-	uc.l.Debug("getting task by ID", "task_id", taskID)
-
 	task, err := uc.taskRepo.GetByID(ctx, taskID)
 	if err != nil {
-		uc.l.Error("failed to get task from database",
-			"error", err,
-			"task_id", taskID,
-		)
 		return nil, apperrors.Wrap(
 			apperrors.CodeDatabaseError,
-			"не удалось получить задачу из базы данных",
+			"failed to get task from database",
 			err,
-		).WithDetails(map[string]interface{}{
-			"task_id": taskID.String(),
-		}).WithStatus(http.StatusInternalServerError)
+		).WithStatus(http.StatusInternalServerError)
 	}
 
-	uc.l.Debug("task retrieved successfully", "task_id", taskID, "status", task.Status)
 	return task, nil
 }
 
 func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
-	start := time.Now()
-	uc.l.Debug("updating task status",
-		"task_id", evt.Key.TaskID,
-		"status_code", evt.Headers.Status,
-	)
-
 	//TODO также как и в handle - сделать Middelware для преобразования кодов или перейти на коды статусов
 	taskStatus, ok := domain.TaskStatus("").FromKafkaCode(evt.Headers.Status)
 	if !ok {
-		uc.l.Error("unknown task status code",
-			"task_id", evt.Key.TaskID,
-			"status_code", evt.Headers.Status,
-		)
-		// Регистрируем метрики ошибки
-		metrics.IncTasksTotal("llm", "error")
 		return apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
 	}
 
@@ -303,29 +221,11 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 			result = uc.taskRepo.UpdateWithError(ctx, evt.Key.TaskID, domain.TaskStatusFailed, evt.Value.ErrorMessage)
 		}
 	case domain.TaskStatusPending:
-		uc.l.Debug("task status is pending, no update needed", "task_id", evt.Key.TaskID)
 		result = nil
 	case domain.TaskStatusCancelled:
-		uc.l.Debug("task status is cancelled, no update needed", "task_id", evt.Key.TaskID)
 		result = nil
 	default:
-		uc.l.Error("unknown task status",
-			"task_id", evt.Key.TaskID,
-			"status", taskStatus,
-			"status_code", evt.Headers.Status,
-		)
 		result = apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
-	}
-
-	// Регистрируем метрики
-	duration := time.Since(start).Seconds()
-	if result != nil {
-		metrics.IncTasksTotal("llm", "error")
-		metrics.ObserveTaskProcessingDuration("llm", "error", duration)
-	} else {
-		statusLabel := string(taskStatus)
-		metrics.IncTasksTotal("llm", statusLabel)
-		metrics.ObserveTaskProcessingDuration("llm", statusLabel, duration)
 	}
 
 	return result

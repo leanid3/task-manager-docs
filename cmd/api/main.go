@@ -123,16 +123,44 @@ func main() {
 	resourceLimiter := limits.NewSemaphoreResourceLimiter()
 	resourceLimiter.SetLimit("tasks", 100) // Максимум 100 одновременных задач
 
-	// Usecases
-	taskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0], logMgr.Get("task"))
-
-	// Создаем фабрику процессоров задач
+	// Фабрика процессоров задач
 	taskProcessorFactory := usecase.NewTaskProcessorFactory()
 
-	// Создаем универсальный usecase
-	unifiedTaskUC := usecase.NewUnifiedTaskUC(taskRepo, storageRepo, taskProcessorFactory, logMgr.Get("task"))
+	// Создаем чистый usecase
+	baseUnifiedTaskUC := usecase.NewUnifiedTaskUC(taskRepo, storageRepo, taskProcessorFactory)
 
-	usecases := usecase.NewUseCases(taskLLMUC, unifiedTaskUC)
+	// Оборачиваем в декораторы
+	unifiedTaskUC := usecase.NewMetricsDecorator(
+		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("app")),
+		metrics.Default, // используем глобальный экземпляр метрик
+	)
+
+	// Создаем чистый TaskLLMUC
+	baseTaskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0])
+
+	// Оборачиваем в декораторы
+	taskLLMUC := usecase.NewMetricsDecoratorTaskLLM(
+		usecase.NewLoggingDecoratorTaskLLM(baseTaskLLMUC, logMgr.Get("task")),
+		metrics.Default, // используем глобальный экземпляр метрик
+	)
+
+	// Создаем usecases
+	usecases := usecase.NewUseCases(
+		taskLLMUC,
+		unifiedTaskUC,
+	)
+
+	// Создаем чистый usecase
+	baseUnifiedTaskUC = usecase.NewUnifiedTaskUC(taskRepo, storageRepo, taskProcessorFactory)
+
+	// Оборачиваем в декораторы
+	decoratedUnifiedTaskUC := usecase.NewMetricsDecorator(
+		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("task")),
+		metrics.Default, // используем глобальный экземпляр метрик
+	)
+
+	// Обновляем usecases с новым decoratedUnifiedTaskUC
+	usecases = usecase.NewUseCases(taskLLMUC, decoratedUnifiedTaskUC)
 
 	l.Info("application components initialized",
 		"task_repo", "created",

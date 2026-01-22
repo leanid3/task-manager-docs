@@ -11,7 +11,7 @@ logger:
   max_size: 10 # максимальный размер файла в мегабайтах (0 = без ограничений)
   max_files: 5 # максимальное количество файлов (0 = без ограничений)
   clear_on_start: true # очищать ли файл при старте приложения
-  mode: file #file, stdout
+  mode: files #files, stdout
 
 server:
   port: 8080

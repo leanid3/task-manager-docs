@@ -79,7 +79,7 @@ func setupTestEnvironment(ctx context.Context, t *testing.T) *TestComponents {
 		},
 		Cmd:          []string{"server", "/data", "--console-address", ":9001"},
 		ExposedPorts: []string{"9000/tcp", "9001/tcp"},
-		WaitingFor:   wait.ForLog("Server startup"),
+		WaitingFor:   wait.ForHTTP("/minio/health/live").WithPort("9000/tcp"),
 	}
 	minioContainer, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: reqMinIO,
@@ -123,6 +123,50 @@ func setupTestEnvironment(ctx context.Context, t *testing.T) *TestComponents {
 	minioConn, err := minio_pkg.NewConnector(minioConfig, dbLogger)
 	require.NoError(t, err)
 
+	// Создаем таблицу tasks
+	_, err = dbConn.Pool().Exec(ctx, `
+-- ============================================================================
+-- Базовая таблица tasks (общая для всех типов задач)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS tasks (
+    -- Идентификация
+    task_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Состояние
+    status        VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+    -- PENDING → PROCESSING → COMPLETED | FAILED
+    result JSONB, -- Worker info (заполняется при обработке)
+    worker_id     VARCHAR(100), -- ID pod'а или worker instance
+
+    created_at    TIMESTAMP NOT NULL DEFAULT NOW(), -- Временная метка создания задачи
+    started_at    TIMESTAMP, -- Временная метка начала обработки задачи
+    completed_at  TIMESTAMP, -- Временная метка завершения задачи
+
+    error_message TEXT, -- Сообщение об ошибке
+
+    request_id    VARCHAR(100), -- HTTP request ID (для логов gateway)
+    trace_id      VARCHAR(100), -- Distributed tracing ID (сквозной)
+
+    metadata JSONB, -- Метаданные задачи
+    -- Constraints
+    CONSTRAINT tasks_status_check
+        CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'CANCELLED')),
+
+    CONSTRAINT tasks_date_check
+        CHECK (
+            (started_at IS NULL OR started_at >= created_at) AND
+            (completed_at IS NULL OR completed_at >= created_at)
+        )
+);
+
+-- Индексы
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status) WHERE status IN ('PENDING', 'PROCESSING');
+CREATE INDEX IF NOT EXISTS idx_tasks_created_at ON tasks(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tasks_trace_id ON tasks(trace_id) WHERE trace_id IS NOT NULL;
+`)
+	if err != nil {
+		t.Fatalf("failed to create tasks table: %v", err)
+	}
+
 	// Create repositories
 	taskRepo := postgres.NewTaskRepository(dbConn.Pool())
 	storageRepo := minio.NewMinioAdapter(minioConn, dbLogger)
@@ -151,7 +195,7 @@ func TestTaskWorkflow_Integration(t *testing.T) {
 
 	// Initialize the unified usecase
 	taskProcessorFactory := usecase.NewTaskProcessorFactory()
-	unifiedTaskUC := usecase.NewUnifiedTaskUC(components.TaskRepo, components.StorageRepo, taskProcessorFactory, components.Logger)
+	unifiedTaskUC := usecase.NewUnifiedTaskUC(components.TaskRepo, components.StorageRepo, taskProcessorFactory)
 
 	// Step 1: Create a task
 	taskID := uuid.New()
@@ -247,7 +291,7 @@ func TestTaskWorkflow_WithFileStorage_Integration(t *testing.T) {
 
 	// Initialize the unified usecase
 	taskProcessorFactory := usecase.NewTaskProcessorFactory()
-	unifiedTaskUC := usecase.NewUnifiedTaskUC(components.TaskRepo, components.StorageRepo, taskProcessorFactory, components.Logger)
+	unifiedTaskUC := usecase.NewUnifiedTaskUC(components.TaskRepo, components.StorageRepo, taskProcessorFactory)
 
 	// Create a sample document to upload
 	docContent := []byte("This is a test document for the task manager system.")

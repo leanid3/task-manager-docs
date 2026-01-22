@@ -158,7 +158,7 @@ func TestTaskUCCreateTask(t *testing.T) {
 
 			tt.setupMocks(mockRepo, mockProducer, mockStorage, mockLogger)
 
-			uc := NewTaskLLMUC(mockRepo, mockProducer, mockStorage, "tasks_llm", mockLogger)
+			uc := NewTaskLLMUC(mockRepo, mockProducer, mockStorage, "tasks_llm")
 
 			taskID, err := uc.CreateTask(context.Background(), tt.reader, tt.filename, tt.filesize, tt.requestID)
 
@@ -230,7 +230,7 @@ func TestTaskUCGetTaskByID(t *testing.T) {
 			mockLogger := new(mocks.Logger)
 			tt.setupMocks(mockRepo, mockLogger)
 
-			uc := NewTaskLLMUC(mockRepo, nil, nil, "tasks_llm", mockLogger)
+			uc := NewTaskLLMUC(mockRepo, nil, nil, "tasks_llm")
 
 			task, err := uc.GetTaskByID(context.Background(), tt.taskID)
 
@@ -430,7 +430,7 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 			repo := new(mocks.MockRepository)
 			logger := new(mocks.Logger)
 			tt.setupMocks(repo, logger)
-			uc := NewTaskLLMUC(repo, nil, nil, "tasks_llm", logger)
+			uc := NewTaskLLMUC(repo, nil, nil, "tasks_llm")
 
 			err := tt.executeMethod(uc, context.Background(), tt.event)
 
