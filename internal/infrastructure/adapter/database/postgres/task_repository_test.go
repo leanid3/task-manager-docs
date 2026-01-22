@@ -244,6 +244,7 @@ func TestTaskRepositoryUpdateStatus(t *testing.T) {
 	// Создаем задачу
 	taskID := uuid.New()
 	traceID := uuid.New()
+	worker_id := "worker-1"
 	metadata := map[string]interface{}{
 		"filename": "test.pdf",
 		"filesize": 1024,
@@ -258,7 +259,7 @@ func TestTaskRepositoryUpdateStatus(t *testing.T) {
     `, taskID, "PENDING", metadataJSON, "req-123", &traceID, time.Now())
 
 	// Act: Обновляем статус на PROCESSING
-	err = repo.UpdateWithStatus(ctx, taskID, domain.TaskStatusProcessing)
+	err = repo.UpdateWithStatus(ctx, taskID, worker_id, domain.TaskStatusProcessing)
 
 	// Assert
 	require.NoError(t, err)
@@ -282,6 +283,7 @@ func TestTaskRepositoryUpdateStatusCompletedSetsTimestamp(t *testing.T) {
 
 	repo := NewTaskRepository(pool)
 	ctx := context.Background()
+	worker_id := "worker-1"
 
 	// Создаем задачу
 	taskID := uuid.New()
@@ -292,7 +294,7 @@ func TestTaskRepositoryUpdateStatusCompletedSetsTimestamp(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act: Обновляем статус на COMPLETED
-	err = repo.UpdateWithStatus(ctx, taskID, domain.TaskStatusCompleted)
+	err = repo.UpdateWithStatus(ctx, taskID, worker_id, domain.TaskStatusProcessing)
 
 	// Assert
 	require.NoError(t, err)
@@ -453,6 +455,7 @@ func TestTaskRepositoryUpdateWithStatus(t *testing.T) {
 
 	// Создаем задачу
 	taskID := uuid.New()
+	worker_id := "worker-1"
 	_, err := pool.Exec(ctx, `
 		INSERT INTO tasks (task_id, status, created_at)
 		VALUES ($1, $2, $3)
@@ -460,7 +463,7 @@ func TestTaskRepositoryUpdateWithStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act: Обновляем статус на PROCESSING
-	err = repo.UpdateWithStatus(ctx, taskID, domain.TaskStatusProcessing)
+	err = repo.UpdateWithStatus(ctx, taskID, worker_id, domain.TaskStatusProcessing)
 
 	// Assert
 	require.NoError(t, err)
@@ -486,6 +489,7 @@ func TestTaskRepositoryUpdateWithResult(t *testing.T) {
 
 	// Создаем задачу
 	taskID := uuid.New()
+	worker_id := "worker-1"
 	_, err := pool.Exec(ctx, `
 		INSERT INTO tasks (task_id, status,  created_at)
 		VALUES ($1, $2, $3)
@@ -493,7 +497,7 @@ func TestTaskRepositoryUpdateWithResult(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act: Обновляем результат
-	err = repo.UpdateWithResult(ctx, taskID, domain.TaskStatusCompleted, []byte(`{"result": "success"}`))
+	err = repo.UpdateWithResult(ctx, taskID, worker_id, domain.TaskStatusCompleted, []byte(`{"result": "success"}`))
 
 	// Assert
 	require.NoError(t, err)

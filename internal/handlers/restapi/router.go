@@ -10,9 +10,11 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
+	"app/pkg/metrics"
 	_ "app/docs" // swagger docs
 )
 
@@ -24,6 +26,7 @@ import (
 func NewRoutes(engine *gin.Engine, cfg *config.Config, uc usecase.UseCases, l logger.Interface) {
 	engine.Use(middleware.RequestID())
 	engine.Use(middleware.Logger(l))
+	engine.Use(middleware.Metrics())
 	engine.Use(middleware.Recovery(l))
 	// engine.Use(middelware.CORS())
 
@@ -44,10 +47,11 @@ func NewRoutes(engine *gin.Engine, cfg *config.Config, uc usecase.UseCases, l lo
 	}
 
 	//Metrics(recommended by Prometheus)
-	// if cfg.Metrics.Enabled {
-	// 	//TODO реализовать promhttp
-	// 	engine.GET(cfg.Metrics.Path, gin.WrapH(promhttp.Handler()))
-	// }
+	if cfg.Metrics.Enabled {
+		engine.GET(cfg.Metrics.Path, gin.WrapH(promhttp.HandlerFor(metrics.GetRegistry(), promhttp.HandlerOpts{
+			// Опционально: настройка обработчика
+		})))
+	}
 
 	//Swagger documentation
 	if cfg.Swagger.Enabled {

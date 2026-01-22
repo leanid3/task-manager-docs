@@ -12,13 +12,18 @@ import (
 	database "app/pkg/database/connector/sql/postgres"
 	"app/pkg/httpserver"
 	"app/pkg/kafka"
-	"app/pkg/logger"
-	pkgminio "app/pkg/minio"
 	"app/pkg/limits"
+	"app/pkg/logger"
+	"app/pkg/metrics"
+	pkgminio "app/pkg/minio"
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -57,6 +62,9 @@ func main() {
 		os.Exit(1)
 	}
 	defer logMgr.Close()
+
+	// Инициализация метрик
+	metrics.InitMetrics()
 
 	l := logMgr.Get("app")
 	l.Info("logger manager initialized", "mode", cfg.Logger.Mode, "level", cfg.Logger.Level)
@@ -108,9 +116,8 @@ func main() {
 	}
 
 	// Репозитории
-	taskRepo := postgres.NewTaskRepository(postgresConnector.Pool())
-	storageRepo := minio.NewMinioAdapter(minioConnector, logMgr.Get("minio"))
-
+	taskRepo := postgres.NewTaskRepositoryWithMetrics(postgresConnector.Pool())
+	storageRepo := minio.NewMinioAdapterWithMetrics(minioConnector, logMgr.Get("minio"))
 
 	// Создаем ограничитель ресурсов
 	resourceLimiter := limits.NewSemaphoreResourceLimiter()
@@ -181,6 +188,23 @@ func main() {
 	l.Info("starting HTTP server", "port", cfg.Server.Port, "host", cfg.Server.Host)
 	httpServer.Start()
 
+	// Запуск сервера для метрик, если они включены
+	var metricsServer *http.Server
+	if cfg.Metrics.Enabled {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle(cfg.Metrics.Path, promhttp.HandlerFor(metrics.GetRegistry(), promhttp.HandlerOpts{}))
+		metricsServer = &http.Server{
+			Addr:    fmt.Sprintf("%s:%d", cfg.Metrics.Host, cfg.Metrics.Port),
+			Handler: metricsMux,
+		}
+		go func() {
+			l.Info("starting metrics server", "addr", metricsServer.Addr)
+			if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				l.Error("metrics server failed", "error", err)
+			}
+		}()
+	}
+
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -189,6 +213,14 @@ func main() {
 	l.Info("shutting down application")
 	cancel() // Остановит consumer
 	httpServer.Shutdown()
+
+	// Остановка сервера метрик
+	if cfg.Metrics.Enabled && metricsServer != nil {
+		if err := metricsServer.Shutdown(context.Background()); err != nil {
+			l.Error("metrics server shutdown error", "error", err)
+		}
+	}
+
 	cons.Stop()
 	postgresConnector.Close()
 

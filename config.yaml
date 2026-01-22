@@ -69,7 +69,7 @@ broker:
 
 metrics:
   enabled: true
-  port: 9090
+  port: 9091
   host: "0.0.0.0"
   path: "/metrics"
 

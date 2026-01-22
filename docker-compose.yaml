@@ -184,7 +184,7 @@ services:
       - ./logs:/app/logs
     ports:
       - "${TASK_MANAGER_HTTP_PORT:-8080}:8080"
-      - "${TASK_MANAGER_METRICS_PORT:-9090}:9090"
+      - "8000:8000"
       # Порт для удаленной отладки (delve)
       # - "${TASK_MANAGER_DEBUG_PORT:-2345}:2345"
     networks:

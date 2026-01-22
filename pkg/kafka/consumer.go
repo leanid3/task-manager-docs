@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"app/pkg/logger"
+	"app/pkg/metrics"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
@@ -208,10 +209,26 @@ func (c *consumer) pollLoop(ctx context.Context) {
 			}
 
 			// Обработка сообщения...
+			start := time.Now()
 			if err := c.handler(msg); err != nil {
 				c.l.Error("failed to handle message", "error", err)
+
+				// Регистрируем метрики ошибки
+				if msg.TopicPartition.Topic != nil {
+					metrics.IncKafkaMessagesConsumed(*msg.TopicPartition.Topic, fmt.Sprintf("%d", msg.TopicPartition.Partition))
+				}
 			} else {
+				// Регистрируем успешное потребление сообщения
+				if msg.TopicPartition.Topic != nil {
+					metrics.IncKafkaMessagesConsumed(*msg.TopicPartition.Topic, fmt.Sprintf("%d", msg.TopicPartition.Partition))
+				}
 				c.commitChain <- msg
+			}
+
+			// Регистрируем время обработки сообщения
+			if msg.TopicPartition.Topic != nil {
+				duration := time.Since(start).Seconds()
+				metrics.ObserveTaskProcessingDuration("kafka_message", "processed", duration)
 			}
 		}
 	}

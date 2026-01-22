@@ -6,6 +6,7 @@ import (
 	apperrors "app/internal/entity/errors"
 	"app/internal/entity/repository"
 	"app/pkg/logger"
+	"app/pkg/metrics"
 	pkgminio "app/pkg/minio"
 	"context"
 	"encoding/json"
@@ -49,6 +50,7 @@ func (uc *TaskLLMUC) CreateTask(
 	filesize int64,
 	requestID string,
 ) (uuid.UUID, error) {
+	start := time.Now()
 	if reader == nil {
 		return uuid.Nil, apperrors.New(
 			apperrors.CodeValidationFailed,
@@ -132,6 +134,9 @@ func (uc *TaskLLMUC) CreateTask(
 			"request_id", requestID,
 		)
 
+		// Регистрируем метрики ошибки
+		metrics.IncTasksTotal("llm", "error")
+
 		return uuid.Nil, apperrors.Wrap(
 			apperrors.CodeStorageError,
 			"не удалось загрузить файл в хранилище.",
@@ -163,6 +168,10 @@ func (uc *TaskLLMUC) CreateTask(
 			"task_id", taskID,
 			"request_id", requestID,
 		)
+
+		// Регистрируем метрики ошибки
+		metrics.IncTasksTotal("llm", "error")
+
 		return uuid.Nil, apperrors.Wrap(
 			apperrors.CodeDatabaseError,
 			"не удалось создать задачу в базе данных",
@@ -190,6 +199,9 @@ func (uc *TaskLLMUC) CreateTask(
 			)
 		}
 
+		// Регистрируем метрики ошибки
+		metrics.IncTasksTotal("llm", "error")
+
 		return uuid.Nil, apperrors.Wrap(
 			apperrors.CodeKafkaError,
 			"failed to publish task to queue",
@@ -206,6 +218,11 @@ func (uc *TaskLLMUC) CreateTask(
 		"topic", uc.topic,
 		"request_id", requestID,
 	)
+
+	// Регистрируем успешное создание задачи
+	duration := time.Since(start).Seconds()
+	metrics.IncTasksTotal("llm", "success")
+	metrics.ObserveTaskProcessingDuration("llm", "success", duration)
 
 	// Удаление файла из хранилища в случае успешного создания задачи не требуется
 	needsCleanup = false
@@ -237,6 +254,7 @@ func (uc *TaskLLMUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*domain
 }
 
 func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+	start := time.Now()
 	uc.l.Debug("updating task status",
 		"task_id", evt.Key.TaskID,
 		"status_code", evt.Headers.Status,
@@ -249,50 +267,66 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 			"task_id", evt.Key.TaskID,
 			"status_code", evt.Headers.Status,
 		)
+		// Регистрируем метрики ошибки
+		metrics.IncTasksTotal("llm", "error")
 		return apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
 	}
 
+	var result error
 	switch taskStatus {
 	case domain.TaskStatusProcessing:
 		//TODO заменить на кеш задач вместо хождения в базу
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
-			return apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
+			result = apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
+		} else if task.Status == domain.TaskStatusProcessing {
+			result = apperrors.New(apperrors.CodeTaskAlreadyProcessing, "task already processing")
+		} else {
+			result = uc.taskRepo.UpdateWithStatus(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusProcessing)
 		}
-		if task.Status == domain.TaskStatusProcessing {
-			return apperrors.New(apperrors.CodeTaskAlreadyProcessing, "task already processing")
-		}
-		return uc.taskRepo.UpdateWithStatus(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusProcessing)
 	case domain.TaskStatusCompleted:
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
-			return apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
+			result = apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
+		} else if task.Status == domain.TaskStatusCompleted {
+			result = apperrors.New(apperrors.CodeTaskAlreadyCompleted, "task already completed")
+		} else {
+			result = uc.taskRepo.UpdateWithResult(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusCompleted, evt.Value.Result)
 		}
-		if task.Status == domain.TaskStatusCompleted {
-			return apperrors.New(apperrors.CodeTaskAlreadyCompleted, "task already completed")
-		}
-		return uc.taskRepo.UpdateWithResult(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusCompleted, evt.Value.Result)
 	case domain.TaskStatusFailed:
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
-			return apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
+			result = apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
+		} else if task.Status == domain.TaskStatusFailed {
+			result = apperrors.New(apperrors.CodeTaskAlreadyFailed, "task already failed")
+		} else {
+			result = uc.taskRepo.UpdateWithError(ctx, evt.Key.TaskID, domain.TaskStatusFailed, evt.Value.ErrorMessage)
 		}
-		if task.Status == domain.TaskStatusFailed {
-			return apperrors.New(apperrors.CodeTaskAlreadyFailed, "task already failed")
-		}
-		return uc.taskRepo.UpdateWithError(ctx, evt.Key.TaskID, domain.TaskStatusFailed, evt.Value.ErrorMessage)
 	case domain.TaskStatusPending:
 		uc.l.Debug("task status is pending, no update needed", "task_id", evt.Key.TaskID)
-		return nil
+		result = nil
 	case domain.TaskStatusCancelled:
 		uc.l.Debug("task status is cancelled, no update needed", "task_id", evt.Key.TaskID)
-		return nil
+		result = nil
 	default:
 		uc.l.Error("unknown task status",
 			"task_id", evt.Key.TaskID,
 			"status", taskStatus,
 			"status_code", evt.Headers.Status,
 		)
-		return apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
+		result = apperrors.New(apperrors.CodeInvalidMessageFormat, "unknown task status")
 	}
+
+	// Регистрируем метрики
+	duration := time.Since(start).Seconds()
+	if result != nil {
+		metrics.IncTasksTotal("llm", "error")
+		metrics.ObserveTaskProcessingDuration("llm", "error", duration)
+	} else {
+		statusLabel := string(taskStatus)
+		metrics.IncTasksTotal("llm", statusLabel)
+		metrics.ObserveTaskProcessingDuration("llm", statusLabel, duration)
+	}
+
+	return result
 }

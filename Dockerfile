@@ -57,8 +57,8 @@ EXPOSE ${SERVER_PORT}
 # ============================================
 FROM base AS dev
 
-# В dev режиме используем config.yaml из директории проекта
-ARG CONFIG_FILE=config.yaml
+# В dev режиме используем config-docker-dev.yaml из директории проекта
+ARG CONFIG_FILE=config-docker-dev.yaml
 WORKDIR /app
 COPY --chown=appuser:appuser ${CONFIG_FILE} ./config.yaml
 CMD ["./app"]
@@ -78,7 +78,7 @@ CMD ["./app"]
 # ============================================
 FROM dev
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${SERVER_PORT}/health || exit 1
+    CMD curl -f http://localhost:${SERVER_PORT}/health/live || exit 1
 # Использование:
 #
 # Dev режим (по умолчанию, использует config.yaml из проекта):

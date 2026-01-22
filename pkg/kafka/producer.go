@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"app/pkg/logger"
+	"app/pkg/metrics"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
@@ -74,6 +75,7 @@ func NewProducer(config ProducerConfig, l logger.Interface) (Producer, error) {
 
 // Send отправляет TaskCommand в Kafka
 func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeaders map[string]string, cmdValue interface{}) error {
+	start := time.Now()
 	p.l.Debug("sending message to kafka",
 		"topic", topic,
 		"key", key,
@@ -86,6 +88,8 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 			"topic", topic,
 			"key", key,
 		)
+		// Регистрируем метрики ошибки
+		metrics.KafkaMessagesProduced.WithLabelValues(topic).Inc()
 		return fmt.Errorf("failed to marshal task command: %w", err)
 	}
 
@@ -99,6 +103,7 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 	deliveryChan := make(chan kafka.Event, 1)
 	p.client.Produce(msg, deliveryChan)
 
+	var deliveryError error
 	select {
 	case <-ctx.Done():
 		// Drain канал асинхронно без блокировки
@@ -115,7 +120,7 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 			case <-time.After(100 * time.Millisecond): // timeout drain
 			}
 		}()
-		return ctx.Err()
+		deliveryError = ctx.Err()
 	case ev := <-deliveryChan:
 		switch e := ev.(type) {
 		case *kafka.Message:
@@ -125,18 +130,24 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 					"key", key,
 					"error", e.TopicPartition.Error,
 				)
-				return fmt.Errorf("delivery failed: %w", e.TopicPartition.Error)
+				deliveryError = fmt.Errorf("delivery failed: %w", e.TopicPartition.Error)
+			} else {
+				p.l.Debug("message delivered successfully",
+					"topic", topic,
+					"key", key,
+					"partition", e.TopicPartition.Partition,
+					"offset", e.TopicPartition.Offset,
+				)
 			}
-			p.l.Debug("message delivered successfully",
-				"topic", topic,
-				"key", key,
-				"partition", e.TopicPartition.Partition,
-				"offset", e.TopicPartition.Offset,
-			)
-			return nil
 		}
 	}
-	return nil
+
+	// Регистрируем метрики
+	duration := time.Since(start).Seconds()
+	metrics.IncKafkaMessagesProduced(topic)
+	metrics.ObserveTaskProcessingDuration("kafka_produce", "processed", duration)
+
+	return deliveryError
 }
 
 func (p *producer) headersToBroker(headers map[string]string) []kafka.Header {
