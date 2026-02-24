@@ -1,17 +1,17 @@
 logger:
   level: info
   format: text # color, json, text
-  app_path: "./logs/app.log"
-  health_path: "./logs/health.log"
-  http_path: "./logs/http.log"
-  kafka_path: "./logs/kafka.log"
-  minio_path: "./logs/minio.log"
-  task_path: "./logs/task.log"
-  s3_path: "./logs/s3.log"
+  # app_path: "./logs/app.log"
+  # health_path: "./logs/health.log"
+  # http_path: "./logs/http.log"
+  # kafka_path: "./logs/kafka.log"
+  # minio_path: "./logs/minio.log"
+  # task_path: "./logs/task.log"
+  # s3_path: "./logs/s3.log"
   max_size: 10 # максимальный размер файла в мегабайтах (0 = без ограничений)
   max_files: 5 # максимальное количество файлов (0 = без ограничений)
   clear_on_start: true # очищать ли файл при старте приложения
-  mode: files #files, stdout
+  mode: stdout #files, stdout
 
 server:
   port: 8080
@@ -37,7 +37,7 @@ database:
 
 broker:
   bootstrap_service: "localhost:9092"
-  client_id: "task_manager_1_client"
+  client_id: "${KAFKA_CLIENT_ID:-task_manager_client}"
   topics:
     - tasks_llm
     # - tasks_analysis
