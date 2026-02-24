@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -15,7 +14,7 @@ import (
 
 // Producer интерфейс для DI и тестов
 type Producer interface {
-	Send(ctx context.Context, topic string, key string, headers map[string]string, value interface{}) error
+	Send(ctx context.Context, topic string, key string, headers map[string]string, value []byte) error
 	Close() error
 }
 
@@ -74,30 +73,18 @@ func NewProducer(config ProducerConfig, l logger.Interface) (Producer, error) {
 }
 
 // Send отправляет TaskCommand в Kafka
-func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeaders map[string]string, cmdValue interface{}) error {
+func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeaders map[string]string, value []byte) error {
 	start := time.Now()
 	p.l.Debug("sending message to kafka",
 		"topic", topic,
 		"key", key,
 	)
 
-	data, err := json.Marshal(cmdValue)
-	if err != nil {
-		p.l.Error("failed to marshal message",
-			"error", err,
-			"topic", topic,
-			"key", key,
-		)
-		// Регистрируем метрики ошибки
-		metrics.KafkaMessagesProduced.WithLabelValues(topic).Inc()
-		return fmt.Errorf("failed to marshal task command: %w", err)
-	}
-
 	msg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
 		Key:            []byte(key),
 		Headers:        p.headersToBroker(cmdHeaders),
-		Value:          data,
+		Value:          value,
 	}
 
 	deliveryChan := make(chan kafka.Event, 1)

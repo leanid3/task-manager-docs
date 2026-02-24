@@ -142,13 +142,18 @@ func (uc *TaskLLMUC) CreateTask(
 		).WithStatus(http.StatusInternalServerError)
 	}
 
-	// Подготовим заголовки для отправки
-	headers := map[string]string{
-		"trace_id":   traceID.String(),
-		"request_id": requestID,
+	// Создаём Kafka-команду по контракту
+	cmd := domain.NewTaskLLMCommand(taskLLM)
+	taskData, err = json.Marshal(cmd.Value)
+	if err != nil {
+		return uuid.Nil, apperrors.Wrap(
+			apperrors.CodeInternalError,
+			"failed to serialize task command for kafka",
+			err,
+		).WithStatus(http.StatusInternalServerError)
 	}
 
-	if err := uc.producer.Send(ctx, uc.topic, taskID.String(), headers, taskData); err != nil {
+	if err := uc.producer.Send(ctx, uc.topic, cmd.Key.TaskID.String(), cmd.Headers.ToMap(), taskData); err != nil {
 		// Если не удалось отправить задачу в очередь, обновляем статус задачи на FAILED
 		if updateErr := uc.taskRepo.UpdateWithError(ctx, taskID, domain.TaskStatusFailed, err.Error()); updateErr != nil {
 			// Логируем ошибку обновления статуса, но не возвращаем её как основную

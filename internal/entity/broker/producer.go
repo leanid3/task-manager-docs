@@ -5,7 +5,7 @@ import (
 )
 
 type Producer interface {
-	Send(ctx context.Context, topic string, key string, headers map[string]string, value interface{}) error
+	Send(ctx context.Context, topic string, key string, headers map[string]string, value []byte) error
 	Close() error
 }
 
