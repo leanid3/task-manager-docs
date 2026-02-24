@@ -97,3 +97,9 @@ func (s TaskStatus) FromKafkaCode(code int) (TaskStatus, bool) {
 		return TaskStatusFailed, false
 	}
 }
+
+// MultiUploadMetadata структура для хранения метаданных задачи многофайловой загрузки
+type MultiUploadMetadata struct {
+	FileCount int      `json:"file_count"`
+	FileKeys  []string `json:"file_keys"`
+}

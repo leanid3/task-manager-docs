@@ -16,6 +16,50 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/multiupload": {
+            "post": {
+                "description": "Загружает несколько файлов и создает задачу на их обработку.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "multiupload"
+                ],
+                "summary": "Создать задачу для загрузки нескольких файлов",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "Файлы для загрузки (множественная загрузка)",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Задача успешно создана",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers_restapi_v1_multiupload.CreateMultiUploadTaskResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Неверный формат запроса",
+                        "schema": {
+                            "$ref": "#/definitions/app_pkg_response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Ошибка при создании задачи",
+                        "schema": {
+                            "$ref": "#/definitions/app_pkg_response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tasks/{filename}": {
             "post": {
                 "description": "Загружает файл в бинарном формате и создает задачу на обработку.",
@@ -216,6 +260,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_handlers_restapi_v1_multiupload.CreateMultiUploadTaskResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "$ref": "#/definitions/app_internal_entity_domain.TaskStatus"
+                },
+                "task_id": {
                     "type": "string"
                 }
             }

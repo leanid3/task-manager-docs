@@ -9,6 +9,7 @@ import (
 	"app/internal/infrastructure/adapter/database/postgres"
 	"app/internal/infrastructure/adapter/storage/minio"
 	"app/internal/usecase"
+	multiuploaduc "app/internal/usecase/multiupload"
 	database "app/pkg/database/connector/sql/postgres"
 	"app/pkg/httpserver"
 	"app/pkg/kafka"
@@ -144,10 +145,26 @@ func main() {
 		metrics.Default, // используем глобальный экземпляр метрик
 	)
 
+	// Создаем MultiUploadUC
+	baseMultiUploadUC := multiuploaduc.NewMultiUploadUC(
+		taskRepo,
+		kafkaProducer,
+		storageRepo,
+		cfg.Broker.Topics[0],
+		10, // максимальное количество одновременных загрузок
+	)
+
+	// Оборачиваем в декораторы
+	multiUploadUC := usecase.NewMetricsDecoratorMultiUpload(
+		usecase.NewLoggingDecoratorMultiUpload(baseMultiUploadUC, logMgr.Get("task")),
+		metrics.Default, // используем глобальный экземпляр метрик
+	)
+
 	// Создаем usecases
 	usecases := usecase.NewUseCases(
 		taskLLMUC,
 		unifiedTaskUC,
+		multiUploadUC,
 	)
 
 	// Создаем чистый usecase
@@ -160,7 +177,7 @@ func main() {
 	)
 
 	// Обновляем usecases с новым decoratedUnifiedTaskUC
-	usecases = usecase.NewUseCases(taskLLMUC, decoratedUnifiedTaskUC)
+	usecases = usecase.NewUseCases(taskLLMUC, decoratedUnifiedTaskUC, multiUploadUC)
 
 	l.Info("application components initialized",
 		"task_repo", "created",

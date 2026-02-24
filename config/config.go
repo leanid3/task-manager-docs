@@ -89,6 +89,8 @@ type ServerConfig struct {
 	ReadTimeout     time.Duration `mapstructure:"read_timeout" yaml:"read_timeout" env:"SERVER_READ_TIMEOUT"`
 	WriteTimeout    time.Duration `mapstructure:"write_timeout" yaml:"write_timeout" env:"SERVER_WRITE_TIMEOUT"`
 	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout" env:"SERVER_SHUTDOWN_TIMEOUT"`
+	MaxFileSize     int64         `mapstructure:"max_file_size" yaml:"max_file_size" env:"SERVER_MAX_FILE_SIZE"` // максимальный размер файла в байтах
+	MaxFileCount    int           `mapstructure:"max_file_count" yaml:"max_file_count" env:"SERVER_MAX_FILE_COUNT"` // максимальное количество файлов для многофайловой загрузки
 }
 
 type SwaggerConfig struct {

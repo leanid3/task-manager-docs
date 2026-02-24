@@ -65,9 +65,45 @@ definitions:
       timestamp:
         type: string
     type: object
+  internal_handlers_restapi_v1_multiupload.CreateMultiUploadTaskResponse:
+    properties:
+      status:
+        $ref: '#/definitions/app_internal_entity_domain.TaskStatus'
+      task_id:
+        type: string
+    type: object
 info:
   contact: {}
 paths:
+  /api/v1/multiupload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загружает несколько файлов и создает задачу на их обработку.
+      parameters:
+      - description: Файлы для загрузки (множественная загрузка)
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Задача успешно создана
+          schema:
+            $ref: '#/definitions/internal_handlers_restapi_v1_multiupload.CreateMultiUploadTaskResponse'
+        "400":
+          description: Неверный формат запроса
+          schema:
+            $ref: '#/definitions/app_pkg_response.ErrorResponse'
+        "500":
+          description: Ошибка при создании задачи
+          schema:
+            $ref: '#/definitions/app_pkg_response.ErrorResponse'
+      summary: Создать задачу для загрузки нескольких файлов
+      tags:
+      - multiupload
   /api/v1/tasks/{filename}:
     post:
       consumes:
