@@ -49,7 +49,7 @@ func TestTaskStatus_ToDatabaseCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			task := &Task{Status: tt.status}
+			task := &BaseTask{Status: tt.status}
 			result := task.ToDatabaseCode()
 			assert.Equal(t, tt.expected, result)
 		})
@@ -160,18 +160,18 @@ func TestTask_Struct(t *testing.T) {
 	now := time.Now()
 	traceID := uuid.New()
 	taskID := uuid.New()
-	
-	task := Task{
-		TaskID:      taskID,
-		Status:      TaskStatusProcessing,
-		Metadata:    map[string]interface{}{"key": "value"},
-		WorkerID:    "worker-1",
-		RequestID:   "req-123",
-		TraceID:     &traceID,
-		Result:      json.RawMessage(`{"result": "data"}`),
-		CreatedAt:   now,
-		StartedAt:   &now,
-		CompletedAt: &now,
+
+	task := BaseTask{
+		TaskID:       taskID,
+		Status:       TaskStatusProcessing,
+		Metadata:     map[string]interface{}{"key": "value"},
+		WorkerID:     "worker-1",
+		RequestID:    "req-123",
+		TraceID:      &traceID,
+		Result:       json.RawMessage(`{"result": "data"}`),
+		CreatedAt:    now,
+		StartedAt:    &now,
+		CompletedAt:  &now,
 		ErrorMessage: "error",
 	}
 

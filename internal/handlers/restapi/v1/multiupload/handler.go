@@ -23,7 +23,7 @@ type CreateMultiUploadTaskResponse struct {
 
 type MultiUploadUCInterface interface {
 	CreateMultiUploadTask(ctx context.Context, files []*multipart.FileHeader, requestID string) (uuid.UUID, error)
-	GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error)
+	GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error)
 }
 
 type Handler struct {

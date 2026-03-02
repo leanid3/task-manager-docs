@@ -39,15 +39,15 @@ func (m *MockTaskLLMUCInterface) CreateTask(ctx context.Context, reader io.Reade
 	return args.Get(0).(uuid.UUID), args.Error(1)
 }
 
-func (m *MockTaskLLMUCInterface) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (m *MockTaskLLMUCInterface) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Task), args.Error(1)
+	return args.Get(0).(domain.Task), args.Error(1)
 }
 
-func (m *MockTaskLLMUCInterface) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+func (m *MockTaskLLMUCInterface) UpdateTaskStatus(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 	args := m.Called(ctx, evt)
 	return args.Error(0)
 }
@@ -188,20 +188,15 @@ func TestRegister(t *testing.T) {
 	mockUC := new(MockTaskLLMUCInterface)
 
 	t.Run("successful registration", func(t *testing.T) {
-		// We'll just call the Register function and check that no error occurs
-		// Since the registration modifies the registry internally, we can't easily mock it
 		err := Register(registry, validator, mockUC, logger)
 
 		assert.NoError(t, err)
-		// We can't directly access registry.handlers since it's unexported
-		// So we'll just verify that no error occurred during registration
 	})
 }
 
 func TestRegister_UseCaseFunction(t *testing.T) {
 	logger := mocks.NewMockLogger()
 	registry := broker.NewRegistry(logger)
-	// For this test, we'll create a real validator with a real extractor
 	realLogger := mocks.NewMockLogger()
 	headerExtractor := extractors.NewHeaderExtractor(realLogger)
 	baseValidator := broker.NewBaseValidator(headerExtractor)
@@ -212,7 +207,7 @@ func TestRegister_UseCaseFunction(t *testing.T) {
 	taskID := uuid.New()
 	traceID := uuid.New()
 
-	event := &domain.TaskLLMStatusEvent{
+	event := domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 		Key: domain.TaskContractKey{
 			TaskID: taskID,
 		},
@@ -226,14 +221,14 @@ func TestRegister_UseCaseFunction(t *testing.T) {
 		},
 	}
 
-	mockUC.On("UpdateTaskStatus", mock.Anything, *event).Return(nil)
+	mockUC.On("UpdateTaskStatus", mock.Anything, event).Return(nil)
 
 	err := Register(registry, validator, mockUC, logger)
 	assert.NoError(t, err)
 
 	// The use case function should call UpdateTaskStatus
 	ctx := context.Background()
-	err = mockUC.UpdateTaskStatus(ctx, *event)
+	err = mockUC.UpdateTaskStatus(ctx, event)
 	assert.NoError(t, err)
 
 	mockUC.AssertExpectations(t)

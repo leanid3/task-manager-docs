@@ -71,7 +71,7 @@ func TestRoutes_CreateTask_HTTP(t *testing.T) {
 					taskMock.On("GetTaskByID",
 						mock.Anything, // context.Context
 						taskID,
-					).Return(&domain.Task{TaskID: taskID, Status: domain.TaskStatusPending}, nil)
+					).Return(&domain.BaseTask{TaskID: taskID, Status: domain.TaskStatusPending}, nil)
 				}
 			}
 
@@ -143,7 +143,7 @@ func TestRoutes_GetTaskByID_HTTP(t *testing.T) {
 					taskMock.On("GetTaskByID",
 						mock.Anything, // context.Context
 						taskID,
-					).Return(&domain.Task{TaskID: taskID, Status: domain.TaskStatusPending}, nil)
+					).Return(&domain.BaseTask{TaskID: taskID, Status: domain.TaskStatusPending}, nil)
 				} else if tt.wantStatus == http.StatusNotFound {
 					// Task not found - возвращаем ошибку
 					taskMock.On("GetTaskByID",

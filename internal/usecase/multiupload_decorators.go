@@ -40,13 +40,13 @@ func (ld *LoggingDecoratorMultiUpload) CreateMultiUploadTask(ctx context.Context
 }
 
 // GetTaskByID возвращает задачу по ID с логированием
-func (ld *LoggingDecoratorMultiUpload) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (ld *LoggingDecoratorMultiUpload) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	ld.logger.Debug("getting multi-upload task by ID", "task_id", id)
 	task, err := ld.next.GetTaskByID(ctx, id)
 	if err != nil {
 		ld.logger.Error("failed to get multi-upload task", "error", err, "task_id", id)
 	} else {
-		ld.logger.Debug("multi-upload task retrieved successfully", "task_id", id, "status", task.Status)
+		ld.logger.Debug("multi-upload task retrieved successfully", "task_id", id, "status", task.GetStatus())
 	}
 	return task, err
 }
@@ -86,7 +86,7 @@ func (md *MetricsDecoratorMultiUpload) CreateMultiUploadTask(ctx context.Context
 }
 
 // GetTaskByID возвращает задачу по ID с измерением метрик
-func (md *MetricsDecoratorMultiUpload) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (md *MetricsDecoratorMultiUpload) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	start := time.Now()
 	task, err := md.next.GetTaskByID(ctx, id)
 	duration := time.Since(start)

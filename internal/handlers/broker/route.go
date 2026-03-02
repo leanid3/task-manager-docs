@@ -9,8 +9,8 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
-type ValidatorFunc[T any] func(*kafka.Message) (*T, error)
-type UseCaseFunc[T any] func(context.Context, *T) error
+type ValidatorFunc[T any] func(*kafka.Message) (T, error)
+type UseCaseFunc[T any] func(context.Context, T) error
 
 // Route – стандартный handler для topic'а
 type Route[T any] struct {

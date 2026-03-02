@@ -21,22 +21,22 @@ func NewTaskLLMValidator(base *broker.BaseValidator) *TaskLLMValidator {
 }
 
 // Validate - полная валидация TaskLLMStatusEvent
-func (v *TaskLLMValidator) Validate(msg *kafka.Message) (*domain.TaskLLMStatusEvent, error) {
+func (v *TaskLLMValidator) Validate(msg *kafka.Message) (domain.BrokerCommand[domain.TaskLLMStatusEventPayload], error) {
 	if v.base == nil {
-		return nil, errors.New("base is not initialized")
+		return domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{}, errors.New("base is not initialized")
 	}
 
 	// 1) Валидируем общую часть (Key + Headers)
 	contract, err := v.base.ValidateContract(msg)
 	if err != nil {
-		return nil, err
+		return domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{}, err
 	}
 
 	// 2) Валидируем специфичный payload (Value)
 	var payload domain.TaskLLMStatusEventPayload
 	if len(msg.Value) > 0 {
 		if err := json.Unmarshal(msg.Value, &payload); err != nil {
-			return nil, apperrors.Wrap(
+			return domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{}, apperrors.Wrap(
 				apperrors.CodeInvalidMessageFormat,
 				"failed to unmarshal task status event",
 				err,
@@ -45,7 +45,7 @@ func (v *TaskLLMValidator) Validate(msg *kafka.Message) (*domain.TaskLLMStatusEv
 	}
 
 	// 3) Собираем событие через композицию
-	event := &domain.TaskLLMStatusEvent{
+	event := domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 		Key: domain.TaskContractKey{
 			TaskID: contract.TaskID,
 		},

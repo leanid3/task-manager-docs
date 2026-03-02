@@ -18,8 +18,8 @@ import (
 // TaskLLMUCInterface интерфейс для TaskLLMUC
 type TaskLLMUCInterface interface {
 	CreateTask(ctx context.Context, reader io.Reader, filename string, filesize int64, requestID string) (uuid.UUID, error)
-	GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error)
-	UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error
+	GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error)
+	UpdateTaskStatus(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error
 }
 
 type TaskLLMUC struct {
@@ -94,7 +94,7 @@ func (uc *TaskLLMUC) CreateTask(
 	}
 
 	taskLLM := &domain.TaskLLM{
-		Task: domain.Task{
+		BaseTask: domain.BaseTask{
 			TaskID:    taskID,
 			Status:    domain.TaskStatusPending,
 			CreatedAt: time.Now(),
@@ -122,7 +122,7 @@ func (uc *TaskLLMUC) CreateTask(
 	}
 
 	// Сохраняем задачу в базе данных
-	if err := uc.taskRepo.Create(ctx, &taskLLM.Task); err != nil {
+	if err := uc.taskRepo.Create(ctx, taskLLM); err != nil {
 		// Если не удалось сохранить задачу в БД, удаляем загруженный файл
 		uc.storageRepo.DeleteObject(ctx, storagePath) // игнорируем ошибку удаления
 		return uuid.Nil, apperrors.Wrap(
@@ -175,7 +175,7 @@ func (uc *TaskLLMUC) CreateTask(
 }
 
 // GetTaskByID - get task by ID
-func (uc *TaskLLMUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (uc *TaskLLMUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	task, err := uc.taskRepo.GetByID(ctx, taskID)
 	if err != nil {
 		return nil, apperrors.Wrap(
@@ -188,7 +188,7 @@ func (uc *TaskLLMUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*domain
 	return task, nil
 }
 
-func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 	//TODO также как и в handle - сделать Middelware для преобразования кодов или перейти на коды статусов
 	taskStatus, ok := domain.TaskStatus("").FromKafkaCode(evt.Headers.Status)
 	if !ok {
@@ -202,7 +202,7 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
 			result = apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
-		} else if task.Status == domain.TaskStatusProcessing {
+		} else if task.GetStatus() == domain.TaskStatusProcessing {
 			result = apperrors.New(apperrors.CodeTaskAlreadyProcessing, "task already processing")
 		} else {
 			result = uc.taskRepo.UpdateWithStatus(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusProcessing)
@@ -211,7 +211,7 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
 			result = apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
-		} else if task.Status == domain.TaskStatusCompleted {
+		} else if task.GetStatus() == domain.TaskStatusCompleted {
 			result = apperrors.New(apperrors.CodeTaskAlreadyCompleted, "task already completed")
 		} else {
 			result = uc.taskRepo.UpdateWithResult(ctx, evt.Key.TaskID, evt.Headers.WorkerID, domain.TaskStatusCompleted, evt.Value.Result)
@@ -220,7 +220,7 @@ func (uc *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMSta
 		task, err := uc.taskRepo.GetByID(ctx, evt.Key.TaskID)
 		if err != nil {
 			result = apperrors.Wrap(apperrors.CodeDatabaseError, "failed to get task", err)
-		} else if task.Status == domain.TaskStatusFailed {
+		} else if task.GetStatus() == domain.TaskStatusFailed {
 			result = apperrors.New(apperrors.CodeTaskAlreadyFailed, "task already failed")
 		} else {
 			result = uc.taskRepo.UpdateWithError(ctx, evt.Key.TaskID, domain.TaskStatusFailed, evt.Value.ErrorMessage)

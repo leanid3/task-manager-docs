@@ -189,7 +189,7 @@ func TestGetTaskByID(t *testing.T) {
 	tests := []struct {
 		name         string
 		taskIDStr    string
-		mockTask     *domain.Task
+		mockTask     *domain.BaseTask
 		mockError    error
 		wantStatus   int
 		wantContains string // ✅ ДОБАВИЛ
@@ -197,7 +197,7 @@ func TestGetTaskByID(t *testing.T) {
 		{
 			name:         "success",
 			taskIDStr:    uuid.New().String(),
-			mockTask:     &domain.Task{TaskID: uuid.New(), Status: domain.TaskStatusPending},
+			mockTask:     &domain.BaseTask{TaskID: uuid.New(), Status: domain.TaskStatusPending},
 			mockError:    nil,
 			wantStatus:   http.StatusOK,
 			wantContains: `"status"`, // проверяем JSON

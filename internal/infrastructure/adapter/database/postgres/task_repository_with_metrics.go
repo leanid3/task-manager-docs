@@ -23,7 +23,7 @@ func NewTaskRepositoryWithMetrics(pool *pgxpool.Pool) *TaskRepositoryWithMetrics
 	}
 }
 
-func (r *TaskRepositoryWithMetrics) Create(ctx context.Context, task *domain.Task) error {
+func (r *TaskRepositoryWithMetrics) Create(ctx context.Context, task domain.Task) error {
 	start := time.Now()
 	err := r.repo.Create(ctx, task)
 	duration := time.Since(start).Seconds()
@@ -39,7 +39,7 @@ func (r *TaskRepositoryWithMetrics) Create(ctx context.Context, task *domain.Tas
 	return err
 }
 
-func (r *TaskRepositoryWithMetrics) GetByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (r *TaskRepositoryWithMetrics) GetByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	start := time.Now()
 	task, err := r.repo.GetByID(ctx, taskID)
 	duration := time.Since(start).Seconds()
@@ -107,7 +107,7 @@ func (r *TaskRepositoryWithMetrics) UpdateWithError(ctx context.Context, taskID 
 	return err
 }
 
-func (r *TaskRepositoryWithMetrics) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
+func (r *TaskRepositoryWithMetrics) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]domain.Task, error) {
 	start := time.Now()
 	tasks, err := r.repo.ListByStatus(ctx, status, limit)
 	duration := time.Since(start).Seconds()

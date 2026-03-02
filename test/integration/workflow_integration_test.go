@@ -217,9 +217,9 @@ func TestTaskWorkflow_Integration(t *testing.T) {
 	// Verify the task was created in the database
 	createdTask, err := unifiedTaskUC.GetTaskByID(ctx, createdTaskID)
 	require.NoError(t, err)
-	assert.Equal(t, domain.TaskStatusPending, createdTask.Status)
-	assert.Equal(t, taskInput.RequestID, createdTask.RequestID)
-	assert.Equal(t, taskInput.Metadata, createdTask.Metadata)
+	assert.Equal(t, domain.TaskStatusPending, createdTask.GetStatus())
+	assert.Equal(t, taskInput.RequestID, createdTask.GetRequestID())
+	assert.Equal(t, taskInput.Metadata, createdTask.GetMetadata())
 
 	// Step 2: Simulate task processing by updating status to processing
 	traceID := uuid.New()
@@ -241,8 +241,8 @@ func TestTaskWorkflow_Integration(t *testing.T) {
 	// Verify the task status was updated to processing
 	updatedTask, err := unifiedTaskUC.GetTaskByID(ctx, createdTaskID)
 	require.NoError(t, err)
-	assert.Equal(t, domain.TaskStatusProcessing, updatedTask.Status)
-	assert.Equal(t, "worker-1", updatedTask.WorkerID)
+	assert.Equal(t, domain.TaskStatusProcessing, updatedTask.GetStatus())
+	assert.Equal(t, "worker-1", updatedTask.GetWorkerID())
 
 	// Step 3: Simulate task completion with result
 	resultData := map[string]interface{}{
@@ -272,8 +272,8 @@ func TestTaskWorkflow_Integration(t *testing.T) {
 	// Verify the task status was updated to completed with result
 	completedTask, err := unifiedTaskUC.GetTaskByID(ctx, createdTaskID)
 	require.NoError(t, err)
-	assert.Equal(t, domain.TaskStatusCompleted, completedTask.Status)
-	assert.JSONEq(t, string(jsonResult), string(completedTask.Result))
+	assert.Equal(t, domain.TaskStatusCompleted, completedTask.GetStatus())
+	assert.JSONEq(t, string(jsonResult), string(completedTask.GetResult()))
 }
 
 func TestTaskWorkflow_WithFileStorage_Integration(t *testing.T) {
@@ -377,7 +377,7 @@ func TestTaskWorkflow_WithFileStorage_Integration(t *testing.T) {
 	// Step 5: Verify final state
 	finalTask, err := unifiedTaskUC.GetTaskByID(ctx, createdTaskID)
 	require.NoError(t, err)
-	assert.Equal(t, domain.TaskStatusCompleted, finalTask.Status)
-	assert.Equal(t, "worker-2", finalTask.WorkerID)
-	assert.Contains(t, string(finalTask.Result), "test document for the task manager")
+	assert.Equal(t, domain.TaskStatusCompleted, finalTask.GetStatus())
+	assert.Equal(t, "worker-2", finalTask.GetWorkerID())
+	assert.Contains(t, string(finalTask.GetResult()), "test document for the task manager")
 }

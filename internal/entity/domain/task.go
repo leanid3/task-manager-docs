@@ -1,17 +1,9 @@
 package domain
 
-import (
-	"encoding/json"
-	"time"
-
-	"github.com/google/uuid"
-)
-
 // @name TaskStatus
 type TaskStatus string
 
 const (
-	//TODO сделать статус коды
 	TaskStatusPending    TaskStatus = "PENDING"
 	TaskStatusProcessing TaskStatus = "PROCESSING"
 	TaskStatusCompleted  TaskStatus = "COMPLETED"
@@ -28,25 +20,14 @@ const (
 // 	TaskTypeAnalyze    TaskType = "ANALYZE"
 // )
 
-// TODO! синхронизировать структуру Task по итогам согласования с LLM сервисом
-// @name Task
-type Task struct {
-	TaskID uuid.UUID `json:"task_id"`
-	// TaskType TaskType   `json:"task_type"`
-	Status       TaskStatus             `json:"status"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	WorkerID     string                 `json:"worker_id,omitempty"`
-	RequestID    string                 `json:"request_id,omitempty"`
-	TraceID      *uuid.UUID             `json:"trace_id,omitempty"`
-	Result       json.RawMessage        `json:"result,omitempty"`
-	CreatedAt    time.Time              `json:"created_at"`
-	StartedAt    *time.Time             `json:"started_at,omitempty"`
-	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
-	ErrorMessage string                 `json:"error_message,omitempty"`
+// MultiUploadMetadata структура для хранения метаданных задачи многофайловой загрузки
+type MultiUploadMetadata struct {
+	FileCount int      `json:"file_count"`
+	FileKeys  []string `json:"file_keys"`
 }
 
-func (t *Task) ToDatabaseCode() string {
-
+// ToDatabaseCode возвращает строковый код для базы данных.
+func (t BaseTask) ToDatabaseCode() string {
 	switch t.Status {
 	case TaskStatusPending:
 		return "PENDING"
@@ -62,7 +43,7 @@ func (t *Task) ToDatabaseCode() string {
 	return ""
 }
 
-// ToKafkaCode возвращает числовой код для Kafka (1-4)
+// ToKafkaCode возвращает числовой код для Kafka.
 func (s TaskStatus) ToKafkaCode() int {
 	switch s {
 	case TaskStatusPending:
@@ -80,7 +61,7 @@ func (s TaskStatus) ToKafkaCode() int {
 	}
 }
 
-// FromKafkaCode преобразует код обратно в TaskStatus
+// FromKafkaCode преобразует код обратно в TaskStatus.
 func (s TaskStatus) FromKafkaCode(code int) (TaskStatus, bool) {
 	switch code {
 	case 1:
@@ -96,10 +77,4 @@ func (s TaskStatus) FromKafkaCode(code int) (TaskStatus, bool) {
 	default:
 		return TaskStatusFailed, false
 	}
-}
-
-// MultiUploadMetadata структура для хранения метаданных задачи многофайловой загрузки
-type MultiUploadMetadata struct {
-	FileCount int      `json:"file_count"`
-	FileKeys  []string `json:"file_keys"`
 }

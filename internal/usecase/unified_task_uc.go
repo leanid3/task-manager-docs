@@ -40,7 +40,7 @@ func (uc *UnifiedTaskUC) CreateTask(ctx context.Context, input domain.TaskInput)
 	traceID := uuid.New()
 
 	// Создаем задачу в базе данных
-	task := &domain.Task{
+	task := &domain.BaseTask{
 		TaskID:    taskID,
 		Status:    domain.TaskStatusPending,
 		CreatedAt: time.Now(),
@@ -58,7 +58,7 @@ func (uc *UnifiedTaskUC) CreateTask(ctx context.Context, input domain.TaskInput)
 }
 
 // GetTaskByID возвращает задачу по ID
-func (uc *UnifiedTaskUC) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (uc *UnifiedTaskUC) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	task, err := uc.taskRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -86,12 +86,12 @@ func (uc *UnifiedTaskUC) UpdateTaskStatus(ctx context.Context, event domain.Task
 	// Обновляем статус в зависимости от типа
 	switch taskStatus {
 	case domain.TaskStatusProcessing:
-		if task.Status == domain.TaskStatusProcessing {
+		if task.GetStatus() == domain.TaskStatusProcessing {
 			return nil // уже в процессе
 		}
 		return uc.taskRepo.UpdateWithStatus(ctx, taskID, event.Headers.WorkerID, domain.TaskStatusProcessing)
 	case domain.TaskStatusCompleted:
-		if task.Status == domain.TaskStatusCompleted {
+		if task.GetStatus() == domain.TaskStatusCompleted {
 			return nil
 		}
 		// Извлекаем результат из события
@@ -105,7 +105,7 @@ func (uc *UnifiedTaskUC) UpdateTaskStatus(ctx context.Context, event domain.Task
 		}
 		return uc.taskRepo.UpdateWithResult(ctx, taskID, event.Headers.WorkerID, domain.TaskStatusCompleted, jsonResult)
 	case domain.TaskStatusFailed:
-		if task.Status == domain.TaskStatusFailed {
+		if task.GetStatus() == domain.TaskStatusFailed {
 			return nil
 		}
 		// Извлекаем сообщение об ошибке из события
@@ -134,7 +134,7 @@ func (uc *UnifiedTaskUC) ProcessTask(ctx context.Context, taskID uuid.UUID) erro
 	}
 
 	// Определяем тип задачи из метаданных
-	taskTypeStr, exists := task.Metadata["task_type"].(string)
+	taskTypeStr, exists := task.GetMetadata()["task_type"].(string)
 	if !exists {
 		return nil
 	}

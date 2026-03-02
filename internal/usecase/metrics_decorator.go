@@ -41,7 +41,7 @@ func (md *MetricsDecorator) CreateTask(ctx context.Context, input domain.TaskInp
 }
 
 // GetTaskByID возвращает задачу по ID с измерением метрик
-func (md *MetricsDecorator) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (md *MetricsDecorator) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	start := time.Now()
 	task, err := md.next.GetTaskByID(ctx, id)
 	duration := time.Since(start)

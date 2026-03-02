@@ -153,7 +153,7 @@ func TestTaskRepositoryCreate(t *testing.T) {
 	// Подготовка данных
 	taskID := uuid.New()
 	traceID := uuid.New()
-	task := &domain.Task{
+	task := &domain.BaseTask{
 		TaskID:    taskID,
 		Status:    domain.TaskStatusPending,
 		RequestID: "req-123",
@@ -210,10 +210,10 @@ func TestTaskRepositoryGetByID(t *testing.T) {
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, taskID, task.TaskID)
-	assert.Equal(t, domain.TaskStatusPending, task.Status)
-	assert.Equal(t, "req-123", task.RequestID)
-	assert.Equal(t, &traceID, task.TraceID)
+	assert.Equal(t, taskID, task.GetID())
+	assert.Equal(t, domain.TaskStatusPending, task.GetStatus())
+	assert.Equal(t, "req-123", task.GetRequestID())
+	assert.Equal(t, &traceID, task.GetTraceID())
 }
 
 // TestTaskRepositoryGetByIDNotFound проверяет ошибку "не найдено"
@@ -381,7 +381,7 @@ func TestTaskRepositoryListByStatus(t *testing.T) {
 	// Проверяем сортировку (по created_at DESC)
 	for i := 0; i < len(tasks)-1; i++ {
 		assert.True(t,
-			tasks[i].CreatedAt.After(tasks[i+1].CreatedAt) || tasks[i].CreatedAt.Equal(tasks[i+1].CreatedAt),
+			tasks[i].GetCreatedAt().After(tasks[i+1].GetCreatedAt()) || tasks[i].GetCreatedAt().Equal(tasks[i+1].GetCreatedAt()),
 			"Задачи должны быть отсортированы по created_at DESC",
 		)
 	}
@@ -428,7 +428,7 @@ func TestTaskRepositoryCreateJSONMetadata(t *testing.T) {
 	}
 
 	// Act - создаем задачу через репозиторий
-	err := repo.Create(ctx, &domain.Task{
+	err := repo.Create(ctx, &domain.BaseTask{
 		TaskID:    taskID,
 		Status:    domain.TaskStatusPending,
 		CreatedAt: time.Now(),
@@ -442,8 +442,9 @@ func TestTaskRepositoryCreateJSONMetadata(t *testing.T) {
 
 	// Assert: Проверяем десериализацию сложной metadata
 	// JSON unmarshal преобразует числа в float64, поэтому сравниваем значения отдельно
-	assert.Equal(t, "test.pdf", retrieved.Metadata["filename"])
-	assert.Equal(t, float64(1024), retrieved.Metadata["filesize"])
+	metadata = retrieved.GetMetadata()
+	assert.Equal(t, "test.pdf", metadata["filename"])
+	assert.Equal(t, float64(1024), metadata["filesize"])
 }
 
 func TestTaskRepositoryUpdateWithStatus(t *testing.T) {

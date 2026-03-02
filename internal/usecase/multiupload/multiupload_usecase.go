@@ -20,7 +20,7 @@ import (
 // MultiUploadUCInterface интерфейс для MultiUploadUC
 type MultiUploadUCInterface interface {
 	CreateMultiUploadTask(ctx context.Context, files []*multipart.FileHeader, requestID string) (uuid.UUID, error)
-	GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error)
+	GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error)
 }
 
 type MultiUploadUC struct {
@@ -154,7 +154,7 @@ func (uc *MultiUploadUC) CreateMultiUploadTask(
 		).WithStatus(http.StatusInternalServerError)
 	}
 
-	task := &domain.Task{
+	task := &domain.BaseTask{
 		TaskID:    taskID,
 		Status:    domain.TaskStatusPending,
 		CreatedAt: time.Now(),
@@ -216,7 +216,7 @@ func (uc *MultiUploadUC) CreateMultiUploadTask(
 }
 
 // GetTaskByID - get task by ID
-func (uc *MultiUploadUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (uc *MultiUploadUC) GetTaskByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	task, err := uc.taskRepo.GetByID(ctx, taskID)
 	if err != nil {
 		return nil, apperrors.Wrap(

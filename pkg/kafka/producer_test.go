@@ -4,12 +4,10 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
-	"app/internal/entity/domain"
 	"app/test/mocks"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -34,27 +32,19 @@ func TestProducerSendSuccess(t *testing.T) {
 	require.NoError(t, err)
 	defer producer.Close()
 
-	// Тестовое сообщение
+	// Тестовое сообщение с использованием BasicMessage
 	testTopic := fmt.Sprintf("test-producer-%d", time.Now().UnixNano())
 	taskID := uuid.New()
-	traceID := uuid.New()
-	cmd := &domain.TaskCommand{
-		Key: domain.TaskContractKey{
-			TaskID: taskID,
-		},
-		Headers: domain.TaskContractHeaders{
-			Status:  domain.TaskStatusPending.ToKafkaCode(),
-			TraceID: &traceID,
-		},
-		Value: map[string]interface{}{
-			"storage_path": "/test/path",
-			"storage_size": int64(1024),
-			"metadata":     map[string]interface{}{"test": "data"},
-		},
+	headers := map[string]string{
+		"task-id": taskID.String(),
+		"status":  "pending",
 	}
+	value := []byte(`{"test":"data"}`)
+
+	msg := NewBasicMessage(testTopic, taskID.String(), headers, value)
 
 	// ✅ Верифицируем доставку через consumer (consumer запустится ДО отправки)
-	verifyMessageDelivered(t, brokers, testTopic, taskID, cmd, producer)
+	verifyMessageDelivered(t, brokers, testTopic, taskID, msg, producer)
 }
 
 func TestProducerSendContextTimeout(t *testing.T) {
@@ -74,20 +64,14 @@ func TestProducerSendContextTimeout(t *testing.T) {
 	defer producer.Close()
 
 	taskID := uuid.New()
-	cmd := &domain.TaskCommand{
-		Key: domain.TaskContractKey{
-			TaskID: taskID,
-		},
-		Headers: domain.TaskContractHeaders{},
-		Value:   map[string]interface{}{},
-	}
+	headers := map[string]string{"task-id": taskID.String()}
+	value := []byte(`{}`)
 
 	// Таймаут контекста 1ms
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 
-	headers := cmd.Headers.ToMap()
-	err = producer.Send(ctx, "timeout-topic", taskID.String(), headers, cmd.Value)
+	err = producer.Send(ctx, "timeout-topic", taskID.String(), headers, value)
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
@@ -109,18 +93,12 @@ func TestProducerCloseFlush(t *testing.T) {
 	// Отправляем несколько сообщений
 	testTopic := "flush-test"
 	taskID := uuid.New()
-	cmd := &domain.TaskCommand{
-		Key: domain.TaskContractKey{
-			TaskID: taskID,
-		},
-		Headers: domain.TaskContractHeaders{},
-		Value:   map[string]interface{}{},
-	}
+	headers := map[string]string{"task-id": taskID.String()}
+	value := []byte(`{}`)
 
 	ctx := context.Background()
-	headers := cmd.Headers.ToMap()
 	for i := 0; i < 5; i++ {
-		require.NoError(t, producer.Send(ctx, testTopic, taskID.String(), headers, cmd.Value))
+		require.NoError(t, producer.Send(ctx, testTopic, taskID.String(), headers, value))
 	}
 
 	// Graceful close
@@ -135,7 +113,7 @@ func TestProducerCloseFlush(t *testing.T) {
 	}, mocks.NewMockLogger())
 	require.NoError(t, err)
 	defer verifyProducer.Close()
-	verifyMessageDelivered(t, brokers, testTopic, taskID, cmd, verifyProducer)
+	verifyMessageDelivered(t, brokers, testTopic, taskID, NewBasicMessage(testTopic, taskID.String(), headers, value), verifyProducer)
 }
 
 func TestProducerHeadersAndKey(t *testing.T) {
@@ -155,23 +133,21 @@ func TestProducerHeadersAndKey(t *testing.T) {
 
 	testTopic := fmt.Sprintf("headers-test-%d", time.Now().UnixNano())
 	taskID := uuid.New()
-	traceID := uuid.New()
-	cmd := &domain.TaskCommand{
-		Key: domain.TaskContractKey{
-			TaskID: taskID,
-		},
-		Headers: domain.TaskContractHeaders{
-			TraceID: &traceID,
-		},
-		Value: map[string]interface{}{},
+	headers := map[string]string{
+		"task-id":   taskID.String(),
+		"trace-id":  uuid.New().String(),
+		"worker-id": "worker-1",
 	}
+	value := []byte(`{}`)
+
+	msg := NewBasicMessage(testTopic, taskID.String(), headers, value)
 
 	// ✅ Проверяем headers и key через consumer (consumer запустится ДО отправки)
-	verifyMessageDelivered(t, brokers, testTopic, taskID, cmd, producer)
+	verifyMessageDelivered(t, brokers, testTopic, taskID, msg, producer)
 }
 
 // Вспомогательная функция - проверяет доставку через consumer
-func verifyMessageDelivered(t *testing.T, brokers, topic string, expectedTaskID uuid.UUID, expected *domain.TaskCommand, producer Producer) {
+func verifyMessageDelivered(t *testing.T, brokers, topic string, expectedTaskID uuid.UUID, msg MessageInterface, producer Producer) {
 	handledMessages := make(chan *kafka.Message, 10)
 	handler := func(msg *kafka.Message) error {
 		handledMessages <- msg
@@ -197,54 +173,49 @@ func verifyMessageDelivered(t *testing.T, brokers, topic string, expectedTaskID 
 	// (Kafka создает топики автоматически при первой отправке)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	headers := expected.Headers.ToMap()
-	err = producer.Send(ctx, topic, expectedTaskID.String(), headers, expected.Value)
-	require.NoError(t, err)
 
-	// Даем время топику создаться и сообщению быть записанным
-	time.Sleep(500 * time.Millisecond)
-
-	// Теперь запускаем consumer (он будет читать с earliest offset)
-	consumerCtx, consumerCancel := context.WithCancel(context.Background())
-	defer consumerCancel()
-
-	consumerDone := make(chan error, 1)
+	// Запускаем consumer в отдельной горутине
 	go func() {
-		consumerDone <- consumer.Start(consumerCtx)
+		_ = consumer.Start(ctx)
 	}()
 
-	// Даем время consumer'у подписаться на топик и получить assignment
+	// Ждем немного, чтобы consumer успел подписаться
 	time.Sleep(2 * time.Second)
 
-	// Ждем получения сообщения
-	waitCtx, waitCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer waitCancel()
+	// Отправляем сообщение
+	err = producer.Send(ctx, msg.ToTopic(), msg.ToKey(), msg.ToHeaders(), msg.ToValue())
+	require.NoError(t, err)
+
+	// Ждем обработки сообщения
 	select {
-	case msg := <-handledMessages:
-		t.Log("✅ Message handled")
-		// Проверяем содержимое сообщения
-		var received map[string]interface{}
-		err := json.Unmarshal(msg.Value, &received)
-		require.NoError(t, err)
-		// Проверяем, что key соответствует taskID
-		require.Equal(t, expectedTaskID.String(), string(msg.Key))
-	case <-waitCtx.Done():
-		consumerCancel() // Останавливаем consumer при таймауте
-		t.Fatalf("Timeout waiting for message handling: %v", waitCtx.Err())
+	case receivedMsg := <-handledMessages:
+		// Проверяем ключ
+		if string(receivedMsg.Key) != msg.ToKey() {
+			t.Errorf("Expected key %s, got %s", msg.ToKey(), string(receivedMsg.Key))
+		}
+		
+		// Проверяем заголовки
+		expectedHeaders := msg.ToHeaders()
+		for k, v := range expectedHeaders {
+			found := false
+			for _, header := range receivedMsg.Headers {
+				if header.Key == k && string(header.Value) == v {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("Header %s=%s not found in received message", k, v)
+			}
+		}
+		
+		// Проверяем значение
+		if string(receivedMsg.Value) != string(msg.ToValue()) {
+			t.Errorf("Expected value %s, got %s", string(msg.ToValue()), string(receivedMsg.Value))
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("Timeout waiting for message handling")
 	}
 
-	// Отменяем контекст - это вызовет Stop() внутри Start()
-	consumerCancel()
-
-	// Не ждем завершения consumer - просто даем время на graceful shutdown
-	// Consumer остановится асинхронно через Start(), который вызывает Stop()
-	// Не вызываем Stop() вручную, чтобы избежать deadlock с sync.Once
-	select {
-	case <-consumerDone:
-		// Consumer успешно остановился
-	case <-time.After(2 * time.Second):
-		// Consumer не остановился за 2 секунды, но это нормально для теста
-		// Главное - сообщение было получено, что и проверяет тест
-		t.Log("Consumer shutdown timeout (this is acceptable for test)")
-	}
+	cancel()
 }

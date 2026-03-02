@@ -39,19 +39,19 @@ func (ld *LoggingDecoratorTaskLLM) CreateTask(ctx context.Context, reader io.Rea
 }
 
 // GetTaskByID возвращает задачу по ID с логированием
-func (ld *LoggingDecoratorTaskLLM) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (ld *LoggingDecoratorTaskLLM) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	ld.logger.Debug("getting LLM task by ID", "task_id", id)
 	task, err := ld.next.GetTaskByID(ctx, id)
 	if err != nil {
 		ld.logger.Error("failed to get LLM task", "error", err, "task_id", id)
 	} else {
-		ld.logger.Debug("LLM task retrieved successfully", "task_id", id, "status", task.Status)
+		ld.logger.Debug("LLM task retrieved successfully", "task_id", id, "status", task.GetStatus())
 	}
 	return task, err
 }
 
 // UpdateTaskStatus обновляет статус задачи с логированием
-func (ld *LoggingDecoratorTaskLLM) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+func (ld *LoggingDecoratorTaskLLM) UpdateTaskStatus(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 	ld.logger.Debug("updating LLM task status", "task_id", evt.Key.TaskID, "status_code", evt.Headers.Status)
 	err := ld.next.UpdateTaskStatus(ctx, evt)
 	if err != nil {
@@ -97,7 +97,7 @@ func (md *MetricsDecoratorTaskLLM) CreateTask(ctx context.Context, reader io.Rea
 }
 
 // GetTaskByID возвращает задачу по ID с измерением метрик
-func (md *MetricsDecoratorTaskLLM) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (md *MetricsDecoratorTaskLLM) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	start := time.Now()
 	task, err := md.next.GetTaskByID(ctx, id)
 	duration := time.Since(start)
@@ -117,7 +117,7 @@ func (md *MetricsDecoratorTaskLLM) GetTaskByID(ctx context.Context, id uuid.UUID
 }
 
 // UpdateTaskStatus обновляет статус задачи с измерением метрик
-func (md *MetricsDecoratorTaskLLM) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+func (md *MetricsDecoratorTaskLLM) UpdateTaskStatus(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 	start := time.Now()
 	err := md.next.UpdateTaskStatus(ctx, evt)
 	duration := time.Since(start)

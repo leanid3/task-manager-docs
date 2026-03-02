@@ -11,11 +11,11 @@ import (
 // TaskProcessor интерфейс для обработки задач
 type TaskProcessor interface {
 	// Process обрабатывает задачу
-	Process(ctx context.Context, task *Task) error
+	Process(ctx context.Context, task Task) error
 	// GetType возвращает тип задачи
-	GetType() string
+	GetType() TaskType
 	// Validate проверяет задачу на корректность
-	Validate(task *Task) error
+	Validate(task Task) error
 	// GetTimeout возвращает таймаут для задачи
 	GetTimeout() time.Duration
 }
@@ -80,7 +80,7 @@ type TaskManager interface {
 	// CreateTask создает новую задачу
 	CreateTask(ctx context.Context, input TaskInput) (uuid.UUID, error)
 	// GetTaskByID возвращает задачу по ID
-	GetTaskByID(ctx context.Context, id uuid.UUID) (*Task, error)
+	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	// UpdateTaskStatus обновляет статус задачи
 	UpdateTaskStatus(ctx context.Context, event TaskEvent) error
 	// ProcessTask обрабатывает задачу

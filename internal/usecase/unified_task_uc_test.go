@@ -20,17 +20,17 @@ type MockTaskRepository struct {
 	mock.Mock
 }
 
-func (m *MockTaskRepository) Create(ctx context.Context, task *domain.Task) error {
+func (m *MockTaskRepository) Create(ctx context.Context, task domain.Task) error {
 	args := m.Called(ctx, task)
 	return args.Error(0)
 }
 
-func (m *MockTaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (m *MockTaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	args := m.Called(ctx, taskID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Task), args.Error(1)
+	return args.Get(0).(domain.Task), args.Error(1)
 }
 
 func (m *MockTaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error {
@@ -48,12 +48,12 @@ func (m *MockTaskRepository) UpdateWithError(ctx context.Context, taskID uuid.UU
 	return args.Error(0)
 }
 
-func (m *MockTaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
+func (m *MockTaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]domain.Task, error) {
 	args := m.Called(ctx, status, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Task), args.Error(1)
+	return args.Get(0).([]domain.Task), args.Error(1)
 }
 
 // MockStorageRepository - мок для repository.Storage
@@ -219,7 +219,7 @@ func TestUnifiedTaskUC_GetTaskByID(t *testing.T) {
 			name:   "successful task retrieval",
 			taskID: uuid.New(),
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository) {
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
 					TaskID: uuid.New(),
 					Status: domain.TaskStatusPending,
 				}, nil)
@@ -278,7 +278,7 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 				},
 			},
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository) {
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
 					TaskID: uuid.New(),
 					Status: domain.TaskStatusPending,
 				}, nil)
@@ -301,7 +301,7 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 				},
 			},
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository) {
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
 					TaskID: uuid.New(),
 					Status: domain.TaskStatusPending,
 				}, nil)
@@ -324,7 +324,7 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 				},
 			},
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository) {
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
 					TaskID: uuid.New(),
 					Status: domain.TaskStatusPending,
 				}, nil)
@@ -399,7 +399,7 @@ func TestUnifiedTaskUC_ProcessTask(t *testing.T) {
 			taskID: uuid.New(),
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository, factory *MockTaskProcessorFactory, processor *MockTaskProcessor) {
 				// Get task
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
 					TaskID: uuid.New(),
 					Status: domain.TaskStatusPending,
 					Metadata: map[string]interface{}{
@@ -423,7 +423,7 @@ func TestUnifiedTaskUC_ProcessTask(t *testing.T) {
 			taskID: uuid.New(),
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository, factory *MockTaskProcessorFactory, processor *MockTaskProcessor) {
 				// Get task
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
 					TaskID: uuid.New(),
 					Status: domain.TaskStatusPending,
 					Metadata: map[string]interface{}{
@@ -450,9 +450,9 @@ func TestUnifiedTaskUC_ProcessTask(t *testing.T) {
 			taskID: uuid.New(),
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository, factory *MockTaskProcessorFactory, processor *MockTaskProcessor) {
 				// Get task without task_type in metadata
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
-					TaskID: uuid.New(),
-					Status: domain.TaskStatusPending,
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
+					TaskID:   uuid.New(),
+					Status:   domain.TaskStatusPending,
 					Metadata: map[string]interface{}{}, // No task_type
 				}, nil)
 			},
@@ -463,7 +463,7 @@ func TestUnifiedTaskUC_ProcessTask(t *testing.T) {
 			taskID: uuid.New(),
 			setupMocks: func(repo *MockTaskRepository, storageRepo *MockStorageRepository, factory *MockTaskProcessorFactory, processor *MockTaskProcessor) {
 				// Get task
-				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.Task{
+				repo.On("GetByID", mock.Anything, mock.AnythingOfType("uuid.UUID")).Return(&domain.BaseTask{
 					TaskID: uuid.New(),
 					Status: domain.TaskStatusPending,
 					Metadata: map[string]interface{}{

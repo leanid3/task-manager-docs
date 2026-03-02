@@ -12,8 +12,8 @@ import (
 	"app/pkg/deduplication"
 	"app/pkg/errors"
 	"app/pkg/limits"
-	"app/pkg/validation"
 	pkgminio "app/pkg/minio"
+	"app/pkg/validation"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -25,25 +25,25 @@ type MockTaskRepository struct {
 	mock.Mock
 }
 
-func (m *MockTaskRepository) Create(ctx context.Context, task *domain.Task) error {
+func (m *MockTaskRepository) Create(ctx context.Context, task domain.Task) error {
 	args := m.Called(ctx, task)
 	return args.Error(0)
 }
 
-func (m *MockTaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (m *MockTaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	args := m.Called(ctx, taskID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Task), args.Error(1)
+	return args.Get(0).(domain.Task), args.Error(1)
 }
 
-func (m *MockTaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
+func (m *MockTaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]domain.Task, error) {
 	args := m.Called(ctx, status, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Task), args.Error(1)
+	return args.Get(0).([]domain.Task), args.Error(1)
 }
 
 func (m *MockTaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error {
@@ -132,14 +132,14 @@ func TestUnifiedTaskIntegration(t *testing.T) {
 
 	// Подготовка тестовых данных
 	taskID := uuid.New()
-	testTask := &domain.Task{
+	testTask := &domain.BaseTask{
 		TaskID:    taskID,
 		Status:    domain.TaskStatusPending,
 		CreatedAt: time.Now(),
 	}
 
 	// Настройка моков
-	mockTaskRepo.On("Create", mock.Anything, mock.AnythingOfType("*domain.Task")).Return(nil)
+	mockTaskRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 	mockTaskRepo.On("GetByID", mock.Anything, taskID).Return(testTask, nil)
 	mockTaskRepo.On("UpdateWithStatus", mock.Anything, taskID, mock.Anything, domain.TaskStatusProcessing).Return(nil)
 

@@ -31,9 +31,12 @@ func (m *MockMultiUploadUCInterface) CreateMultiUploadTask(ctx context.Context, 
 	return args.Get(0).(uuid.UUID), args.Error(1)
 }
 
-func (m *MockMultiUploadUCInterface) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (m *MockMultiUploadUCInterface) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	args := m.Called(ctx, id)
-	return args.Get(0).(*domain.Task), args.Error(1)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(domain.Task), args.Error(1)
 }
 
 func TestCreateMultiUploadTaskHandler(t *testing.T) {
@@ -41,7 +44,7 @@ func TestCreateMultiUploadTaskHandler(t *testing.T) {
 
 	// Подготовка мока юзкейса
 	mockUC := new(MockMultiUploadUCInterface)
-	
+
 	// Подготовка конфигурации
 	config := &Config{
 		Server: struct {
@@ -52,7 +55,7 @@ func TestCreateMultiUploadTaskHandler(t *testing.T) {
 		MaxFileSize:  10485760, // 10MB
 		MaxFileCount: 10,
 	}
-	
+
 	// Подготовка логгера
 	log := logger.New(io.Discard, "debug", "text")
 
@@ -62,16 +65,16 @@ func TestCreateMultiUploadTaskHandler(t *testing.T) {
 		// Создаем multipart/form-data запрос
 		body := new(bytes.Buffer)
 		writer := multipart.NewWriter(body)
-		
+
 		// Добавляем несколько файлов
 		for i := 0; i < 2; i++ {
 			part, err := writer.CreateFormFile("files", fmt.Sprintf("test%d.txt", i))
 			assert.NoError(t, err)
-			
+
 			_, err = part.Write([]byte(fmt.Sprintf("content of file %d", i)))
 			assert.NoError(t, err)
 		}
-		
+
 		writer.Close()
 
 		req, _ := http.NewRequest("POST", "/multiupload", body)
@@ -129,16 +132,16 @@ func TestCreateMultiUploadTaskHandler(t *testing.T) {
 	t.Run("file too large", func(t *testing.T) {
 		body := new(bytes.Buffer)
 		writer := multipart.NewWriter(body)
-		
+
 		// Добавляем файл, который превышает лимит
 		part, err := writer.CreateFormFile("files", "large_file.txt")
 		assert.NoError(t, err)
-		
+
 		// Записываем больше данных, чем разрешено
 		largeData := make([]byte, config.MaxFileSize+1)
 		_, err = part.Write(largeData)
 		assert.NoError(t, err)
-		
+
 		writer.Close()
 
 		req, _ := http.NewRequest("POST", "/multiupload", body)

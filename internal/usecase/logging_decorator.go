@@ -36,13 +36,13 @@ func (ld *LoggingDecorator) CreateTask(ctx context.Context, input domain.TaskInp
 }
 
 // GetTaskByID возвращает задачу по ID с логированием
-func (ld *LoggingDecorator) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (ld *LoggingDecorator) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	ld.logger.Debug("getting task by ID", "task_id", id)
 	task, err := ld.next.GetTaskByID(ctx, id)
 	if err != nil {
 		ld.logger.Error("failed to get task", "error", err, "task_id", id)
 	} else {
-		ld.logger.Debug("task retrieved successfully", "task_id", id, "status", task.Status)
+		ld.logger.Debug("task retrieved successfully", "task_id", id, "status", task.GetStatus())
 	}
 	return task, err
 }

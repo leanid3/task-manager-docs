@@ -4,13 +4,6 @@ import (
 	"encoding/json"
 )
 
-// Сообщение для брокера
-type TaskLLMCommand struct {
-	Key     TaskContractKey
-	Headers TaskContractHeaders
-	Value   TaskLLMCommandPayload
-}
-
 // тело сообщения,которое будет отправлено в broker по задаче LLM
 type TaskLLMCommandPayload struct {
 	StoragePath string      `json:"storage_path"`
@@ -19,8 +12,8 @@ type TaskLLMCommandPayload struct {
 }
 
 // NewTaskLLMCommand создает команду для задачи LLM
-func NewTaskLLMCommand(task *TaskLLM) *TaskLLMCommand {
-	return &TaskLLMCommand{
+func NewTaskLLMCommand(task *TaskLLM) BrokerCommand[TaskLLMCommandPayload] {
+	return BrokerCommand[TaskLLMCommandPayload]{
 		Key: TaskContractKey{
 			TaskID: task.TaskID,
 		},
@@ -37,22 +30,18 @@ func NewTaskLLMCommand(task *TaskLLM) *TaskLLMCommand {
 	}
 }
 
-// Сообщение ожидаемое от брокера - consumer
-type TaskLLMStatusEvent struct {
-	Key     TaskContractKey
-	Headers TaskContractHeaders
-	Value   TaskLLMStatusEventPayload
-}
-
 // Тело события,которое будет получена от broker LLM сервиса
 type TaskLLMStatusEventPayload struct {
 	Result       json.RawMessage `json:"result,omitempty"`
 	ErrorMessage string          `json:"error_message,omitempty"`
 }
 
+// TaskLLMStatusEvent — псевдоним для BrokerCommand с payload TaskLLMStatusEventPayload
+type TaskLLMStatusEvent = BrokerCommand[TaskLLMStatusEventPayload]
+
 // NewTaskLLMStatusEvent создает событие статуса задачи LLM
-func NewTaskLLMStatusEvent(task *TaskLLM) *TaskLLMStatusEvent {
-	return &TaskLLMStatusEvent{
+func NewTaskLLMStatusEvent(task *TaskLLM) BrokerCommand[TaskLLMStatusEventPayload] {
+	return BrokerCommand[TaskLLMStatusEventPayload]{
 		Key: TaskContractKey{
 			TaskID: task.TaskID,
 		},

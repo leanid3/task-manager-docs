@@ -2,7 +2,7 @@ package domain
 
 // TODO! если треубется сохранить результат в базе, то нужно переопределить слой Adapter
 type TaskLLM struct {
-	Task
+	BaseTask
 	StoragePath string      `json:"storage_path,omitempty"`
 	StorageSize int64       `json:"storage_size,omitempty"`
 	Metadata    LLMMetadata `json:"metadata,omitempty"`

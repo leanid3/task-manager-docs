@@ -8,6 +8,7 @@ import (
 
 	"app/internal/entity/domain"
 	pkgminio "app/pkg/minio"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -18,19 +19,19 @@ type MockTaskRepository struct {
 	mock.Mock
 }
 
-func (m *MockTaskRepository) Create(ctx context.Context, task *domain.Task) error {
+func (m *MockTaskRepository) Create(ctx context.Context, task domain.Task) error {
 	args := m.Called(ctx, task)
 	return args.Error(0)
 }
 
-func (m *MockTaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (m *MockTaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	args := m.Called(ctx, taskID)
-	return args.Get(0).(*domain.Task), args.Error(1)
+	return args.Get(0).(domain.Task), args.Error(1)
 }
 
-func (m *MockTaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
+func (m *MockTaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]domain.Task, error) {
 	args := m.Called(ctx, status, limit)
-	return args.Get(0).([]*domain.Task), args.Error(1)
+	return args.Get(0).([]domain.Task), args.Error(1)
 }
 
 func (m *MockTaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error {
@@ -53,7 +54,7 @@ type MockProducer struct {
 	mock.Mock
 }
 
-func (m *MockProducer) Send(ctx context.Context, topic, key string, headers map[string]string, value interface{}) error {
+func (m *MockProducer) Send(ctx context.Context, topic, key string, headers map[string]string, value []byte) error {
 	args := m.Called(ctx, topic, key, headers, value)
 	return args.Error(0)
 }
@@ -113,10 +114,8 @@ func TestCreateMultiUploadTask(t *testing.T) {
 
 	// Тестирование успешного создания задачи
 	t.Run("successful creation", func(t *testing.T) {
-		// Здесь мы не можем протестировать реальную загрузку файлов, так как нам нужны multipart.FileHeader
-		// Вместо этого протестируем возвращение ошибки при пустом списке файлов
 		ctx := context.Background()
-		
+
 		taskID, err := uc.CreateMultiUploadTask(ctx, nil, "test_request_id")
 		assert.Error(t, err)
 		assert.Equal(t, uuid.Nil, taskID)

@@ -72,8 +72,8 @@ func NewProducer(config ProducerConfig, l logger.Interface) (Producer, error) {
 	}, nil
 }
 
-// Send отправляет TaskCommand в Kafka
-func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeaders map[string]string, value []byte) error {
+// Send отправляет сообщение в Kafka
+func (p *producer) Send(ctx context.Context, topic string, key string, headers map[string]string, value []byte) error {
 	start := time.Now()
 	p.l.Debug("sending message to kafka",
 		"topic", topic,
@@ -83,7 +83,7 @@ func (p *producer) Send(ctx context.Context, topic string, key string, cmdHeader
 	msg := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
 		Key:            []byte(key),
-		Headers:        p.headersToBroker(cmdHeaders),
+		Headers:        p.headersToBroker(headers),
 		Value:          value,
 	}
 

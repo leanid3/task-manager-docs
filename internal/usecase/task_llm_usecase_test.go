@@ -46,8 +46,8 @@ func TestTaskUCCreateTask(t *testing.T) {
 
 				//Мокируем создание в БД
 				//! без транзакции
-				repo.On("Create", mock.Anything, mock.MatchedBy(func(task *domain.Task) bool {
-					return task.Status == domain.TaskStatusPending
+				repo.On("Create", mock.Anything, mock.MatchedBy(func(task domain.Task) bool {
+					return task.GetStatus() == domain.TaskStatusPending
 				})).
 					Return(nil)
 
@@ -196,7 +196,7 @@ func TestTaskUCGetTaskByID(t *testing.T) {
 			taskID: uuid.New(),
 			setupMocks: func(repo *mocks.MockRepository, logger *mocks.Logger) {
 				repo.On("GetByID", mock.Anything, mock.Anything).
-					Return(&domain.Task{
+					Return(&domain.BaseTask{
 						TaskID: uuid.New(),
 					}, nil)
 			},
@@ -256,8 +256,8 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 	tests := []struct {
 		name          string
 		setupMocks    func(*mocks.MockRepository, *mocks.Logger)
-		executeMethod func(*TaskLLMUC, context.Context, domain.TaskLLMStatusEvent) error
-		event         domain.TaskLLMStatusEvent
+		executeMethod func(*TaskLLMUC, context.Context, domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error
+		event         domain.BrokerCommand[domain.TaskLLMStatusEventPayload]
 		expectedError bool
 		errorCode     apperrors.ErrorCode
 	}{
@@ -265,17 +265,17 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 			name: "задача успешно обновлена",
 			setupMocks: func(repo *mocks.MockRepository, logger *mocks.Logger) {
 				repo.On("GetByID", mock.Anything, mock.Anything).
-					Return(&domain.Task{
+					Return(&domain.BaseTask{
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
 				repo.On("UpdateWithStatus", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusProcessing).
 					Return(nil)
 			},
-			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 				return uc.UpdateTaskStatus(ctx, evt)
 			},
-			event: domain.TaskLLMStatusEvent{
+			event: domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -289,17 +289,17 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 			name: "добавлен результат",
 			setupMocks: func(repo *mocks.MockRepository, logger *mocks.Logger) {
 				repo.On("GetByID", mock.Anything, mock.Anything).
-					Return(&domain.Task{
+					Return(&domain.BaseTask{
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
 				repo.On("UpdateWithResult", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusCompleted, mock.Anything).
 					Return(nil)
 			},
-			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 				return uc.UpdateTaskStatus(ctx, evt)
 			},
-			event: domain.TaskLLMStatusEvent{
+			event: domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -316,17 +316,17 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 			name: "добавлена ошибка",
 			setupMocks: func(repo *mocks.MockRepository, logger *mocks.Logger) {
 				repo.On("GetByID", mock.Anything, mock.Anything).
-					Return(&domain.Task{
+					Return(&domain.BaseTask{
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
 				repo.On("UpdateWithError", mock.Anything, mock.Anything, domain.TaskStatusFailed, mock.Anything).
 					Return(nil)
 			},
-			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 				return uc.UpdateTaskStatus(ctx, evt)
 			},
-			event: domain.TaskLLMStatusEvent{
+			event: domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -343,17 +343,17 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 			name: "задача не найдена",
 			setupMocks: func(repo *mocks.MockRepository, logger *mocks.Logger) {
 				repo.On("GetByID", mock.Anything, mock.Anything).
-					Return(&domain.Task{
+					Return(&domain.BaseTask{
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
 				repo.On("UpdateWithStatus", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusProcessing).
 					Return(fmt.Errorf("задача не найдена"))
 			},
-			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 				return uc.UpdateTaskStatus(ctx, evt)
 			},
-			event: domain.TaskLLMStatusEvent{
+			event: domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -371,17 +371,17 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 			name: "задача не найдена при добавлении результата",
 			setupMocks: func(repo *mocks.MockRepository, logger *mocks.Logger) {
 				repo.On("GetByID", mock.Anything, mock.Anything).
-					Return(&domain.Task{
+					Return(&domain.BaseTask{
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
 				repo.On("UpdateWithResult", mock.Anything, mock.Anything, mock.Anything, domain.TaskStatusCompleted, mock.Anything).
 					Return(fmt.Errorf("задача не найдена"))
 			},
-			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 				return uc.UpdateTaskStatus(ctx, evt)
 			},
-			event: domain.TaskLLMStatusEvent{
+			event: domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -399,17 +399,17 @@ func TestTaskStatusUCUpdateTaskStatus(t *testing.T) {
 			name: "задача не найдена при добавлении ошибки",
 			setupMocks: func(repo *mocks.MockRepository, logger *mocks.Logger) {
 				repo.On("GetByID", mock.Anything, mock.Anything).
-					Return(&domain.Task{
+					Return(&domain.BaseTask{
 						TaskID: uuid.New(),
 						Status: domain.TaskStatusPending,
 					}, nil)
 				repo.On("UpdateWithError", mock.Anything, mock.Anything, domain.TaskStatusFailed, mock.Anything).
 					Return(fmt.Errorf("задача не найдена"))
 			},
-			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+			executeMethod: func(uc *TaskLLMUC, ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 				return uc.UpdateTaskStatus(ctx, evt)
 			},
-			event: domain.TaskLLMStatusEvent{
+			event: domain.BrokerCommand[domain.TaskLLMStatusEventPayload]{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},

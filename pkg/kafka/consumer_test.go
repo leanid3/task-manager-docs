@@ -63,7 +63,7 @@ func TestConsumerLifecycle(t *testing.T) {
 	// 1. Consumer
 	handled := make(chan struct{})
 	handler := func(msg *kafka.Message) error {
-		t.Logf("✅ Handled: %s", msg.Value)
+		t.Logf("✅ Handled: %s", string(msg.Value))
 		close(handled)
 		return nil
 	}

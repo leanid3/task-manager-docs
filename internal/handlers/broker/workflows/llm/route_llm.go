@@ -14,8 +14,8 @@ func Register(
 	uc usecase.TaskLLMUCInterface,
 	l logger.Interface,
 ) error {
-	useCaseFn := func(ctx context.Context, evt *domain.TaskLLMStatusEvent) error {
-		return uc.UpdateTaskStatus(ctx, *evt)
+	useCaseFn := func(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
+		return uc.UpdateTaskStatus(ctx, evt)
 	}
 
 	route := broker.NewRoute("tasks_llm", v.Validate, useCaseFn, l)

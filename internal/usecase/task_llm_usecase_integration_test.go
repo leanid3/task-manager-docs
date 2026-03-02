@@ -89,9 +89,10 @@ func TestTaskUCIntegrationCreateTask(t *testing.T) {
 		// ✅ Проверяем, что задача создана в DB
 		task, err := uc.GetTaskByID(ctx, taskID)
 		require.NoError(t, err)
-		require.Equal(t, domain.TaskStatusPending, task.Status)
-		require.Equal(t, filename, task.Metadata["filename"])
-		require.Equal(t, "application/octet-stream", task.Metadata["content_type"])
+		require.Equal(t, domain.TaskStatusPending, task.GetStatus())
+		metadata := task.GetMetadata()
+		require.Equal(t, filename, metadata["filename"])
+		require.Equal(t, "application/octet-stream", metadata["content_type"])
 
 		// ✅ Проверяем, что файл в MinIO
 		// Генерируем путь заново, так как репозиторий возвращает только Task, а не TaskLLM
@@ -135,7 +136,7 @@ func TestTaskUCIntegrationCreateTask(t *testing.T) {
 		// Получаем
 		task, err := uc.GetTaskByID(ctx, taskID)
 		require.NoError(t, err)
-		require.Equal(t, taskID, task.TaskID)
+		require.Equal(t, taskID, task.GetID())
 	})
 
 	t.Run("GetTaskByID not found", func(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TODO обудмать добавление транзакции
+// TaskRepository реализует интерфейс repository.Task
 type TaskRepository struct {
 	db database.DB
 }
@@ -22,25 +22,25 @@ func NewTaskRepository(pool *pgxpool.Pool) *TaskRepository {
 	return &TaskRepository{db: pool}
 }
 
-func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
+func (r *TaskRepository) Create(ctx context.Context, task domain.Task) error {
 	query := `
         INSERT INTO tasks (
             task_id, status, request_id, trace_id, created_at, metadata
         ) VALUES ($1, $2, $3, $4, $5, $6)
     `
-	metadataJSON, err := json.Marshal(task.Metadata)
+	metadataJSON, err := json.Marshal(task.GetMetadata())
 	if err != nil {
 		return fmt.Errorf("failed to marshal input metadata: %w", err)
 	}
 
-	_, err = r.db.Exec(ctx, query, task.TaskID, task.Status, task.RequestID, task.TraceID, task.CreatedAt, metadataJSON)
+	_, err = r.db.Exec(ctx, query, task.GetID(), task.GetStatus(), task.GetRequestID(), task.GetTraceID(), task.GetCreatedAt(), metadataJSON)
 	if err != nil {
 		return fmt.Errorf("failed to execute query: %w", err)
 	}
 	return nil
 }
 
-func (r *TaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (r *TaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	query := `
         SELECT task_id, status, metadata,
                worker_id, created_at, request_id, trace_id,
@@ -49,16 +49,14 @@ func (r *TaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain
         WHERE task_id = $1
     `
 
-	var task domain.Task
-	var metadataJSON []byte
-	var workerID *string
+	var baseTask domain.BaseTask
+	var metadataJSON, resultJSON []byte
+	var workerID, requestID, traceID, errorMessage *string
 	var startedAt, completedAt *time.Time
-	var requestID, traceID, errorMessage *string
-	var resultJSON []byte
 
 	err := r.db.QueryRow(ctx, query, taskID).Scan(
-		&task.TaskID, &task.Status, &metadataJSON,
-		&workerID, &task.CreatedAt, &requestID, &traceID,
+		&baseTask.TaskID, &baseTask.Status, &metadataJSON,
+		&workerID, &baseTask.CreatedAt, &requestID, &traceID,
 		&startedAt, &completedAt, &errorMessage, &resultJSON,
 	)
 
@@ -71,37 +69,37 @@ func (r *TaskRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain
 	}
 
 	if len(metadataJSON) > 0 {
-		if err := json.Unmarshal(metadataJSON, &task.Metadata); err != nil {
+		if err := json.Unmarshal(metadataJSON, &baseTask.Metadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal input metadata: %w", err)
 		}
 	}
 
 	if workerID != nil {
-		task.WorkerID = *workerID
+		baseTask.WorkerID = *workerID
 	}
-	task.StartedAt = startedAt
-	task.CompletedAt = completedAt
+	baseTask.StartedAt = startedAt
+	baseTask.CompletedAt = completedAt
 
 	if requestID != nil {
-		task.RequestID = *requestID
+		baseTask.RequestID = *requestID
 	}
 	if traceID != nil {
 		traceIDUUID, err := uuid.Parse(*traceID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse trace ID: %w", err)
 		}
-		task.TraceID = &traceIDUUID
+		baseTask.TraceID = &traceIDUUID
 	}
 	if errorMessage != nil {
-		task.ErrorMessage = *errorMessage
+		baseTask.ErrorMessage = *errorMessage
 	}
 	if len(resultJSON) > 0 {
-		if err := json.Unmarshal(resultJSON, &task.Result); err != nil {
+		if err := json.Unmarshal(resultJSON, &baseTask.Result); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal result worker: %w", err)
 		}
 	}
 
-	return &task, nil
+	return &baseTask, nil
 }
 
 func (r *TaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error {
@@ -127,7 +125,6 @@ func (r *TaskRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID,
 		return fmt.Errorf("task not found: %s", taskID)
 	}
 	return nil
-
 }
 
 func (r *TaskRepository) UpdateWithResult(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus, result json.RawMessage) error {
@@ -165,7 +162,7 @@ func (r *TaskRepository) UpdateWithError(ctx context.Context, taskID uuid.UUID, 
 	return nil
 }
 
-func (r *TaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
+func (r *TaskRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]domain.Task, error) {
 	query := `
 	SELECT task_id, status, created_at
 	FROM tasks
@@ -179,13 +176,13 @@ func (r *TaskRepository) ListByStatus(ctx context.Context, status domain.TaskSta
 	}
 	defer rows.Close()
 
-	var tasks []*domain.Task
+	var tasks []domain.Task
 	for rows.Next() {
-		var task domain.Task
-		if err := rows.Scan(&task.TaskID, &task.Status, &task.CreatedAt); err != nil {
+		var baseTask domain.BaseTask
+		if err := rows.Scan(&baseTask.TaskID, &baseTask.Status, &baseTask.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
 		}
-		tasks = append(tasks, &task)
+		tasks = append(tasks, &baseTask)
 	}
 	return tasks, rows.Err()
 }

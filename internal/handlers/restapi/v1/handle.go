@@ -31,7 +31,7 @@ type GetTaskResponse struct {
 
 type TaskLLMUCInterface interface {
 	CreateTask(ctx context.Context, reader io.Reader, filename string, filesize int64, requestID string) (uuid.UUID, error)
-	GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error)
+	GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error)
 }
 
 // createTask создает задачу обработки файла с потоковой загрузкой
@@ -136,9 +136,9 @@ func (r *V1) getTaskByID(c *gin.Context) {
 
 	requestID := c.GetString("request_id")
 	c.JSON(http.StatusOK, response.Success(GetTaskResponse{
-		TaskID:       task.TaskID,
-		Status:       task.Status,
-		TaskResults:  task.Result,
-		ErrorMessage: task.ErrorMessage,
+		TaskID:       task.GetID(),
+		Status:       task.GetStatus(),
+		TaskResults:  task.GetResult(),
+		ErrorMessage: task.GetErrorMessage(),
 	}, requestID))
 }

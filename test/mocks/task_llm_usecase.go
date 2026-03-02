@@ -18,17 +18,17 @@ type MockRepository struct {
 	mock.Mock
 }
 
-func (m *MockRepository) Create(ctx context.Context, task *domain.Task) error {
+func (m *MockRepository) Create(ctx context.Context, task domain.Task) error {
 	args := m.Called(ctx, task)
 	return args.Error(0)
 }
 
-func (m *MockRepository) GetByID(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+func (m *MockRepository) GetByID(ctx context.Context, taskID uuid.UUID) (domain.Task, error) {
 	args := m.Called(ctx, taskID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Task), args.Error(1)
+	return args.Get(0).(domain.Task), args.Error(1)
 }
 
 func (m *MockRepository) UpdateWithStatus(ctx context.Context, taskID uuid.UUID, worker_id string, status domain.TaskStatus) error {
@@ -41,12 +41,12 @@ func (m *MockRepository) UpdateWithResult(ctx context.Context, taskID uuid.UUID,
 	return args.Error(0)
 }
 
-func (m *MockRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
+func (m *MockRepository) ListByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]domain.Task, error) {
 	args := m.Called(ctx, status, limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.Task), args.Error(1)
+	return args.Get(0).([]domain.Task), args.Error(1)
 }
 
 func (m *MockRepository) UpdateWithError(ctx context.Context, taskID uuid.UUID, status domain.TaskStatus, errorMessage string) error {
@@ -108,7 +108,7 @@ type MockProducer struct {
 	mock.Mock
 }
 
-func (m *MockProducer) Send(ctx context.Context, topic string, key string, headers map[string]string, value interface{}) error {
+func (m *MockProducer) Send(ctx context.Context, topic string, key string, headers map[string]string, value []byte) error {
 	args := m.Called(ctx, topic, key, headers, value)
 	return args.Error(0)
 }
@@ -131,15 +131,15 @@ func (m *TaskLLMUC) CreateTask(ctx context.Context, reader io.Reader, filename s
 	return args.Get(0).(uuid.UUID), args.Error(1)
 }
 
-func (m *TaskLLMUC) GetTaskByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
+func (m *TaskLLMUC) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*domain.Task), args.Error(1)
+	return args.Get(0).(domain.Task), args.Error(1)
 }
 
-func (m *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.TaskLLMStatusEvent) error {
+func (m *TaskLLMUC) UpdateTaskStatus(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error {
 	args := m.Called(ctx, evt)
 	return args.Error(0)
 }
