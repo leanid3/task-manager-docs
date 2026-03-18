@@ -1,15 +1,15 @@
 ### Task-manager
 ---
 ### Цель:
- 1) Точка доступа в приложение по API для внешних сервисов  
- 2) Постановка задач для workerов  
- 3) Получение результатов с workerов  
+ 1) Точка доступа в приложение по API для внешних сервисов
+ 2) Постановка задач для workerов
+ 3) Получение результатов с workerов
 
 ---
 ### Взаимодействие с другими сервисами:
- 1) Kafka — consumer и producer  
- 2) Postgres — connector и adapter  
- 3) MinIO — connector и adapter  
+ 1) Kafka — consumer и producer
+ 2) Postgres — connector и adapter
+ 3) MinIO — connector и adapter
 
 ---
 Возможен доступ по Swagger: http://localhost:8080/swagger/index.html
@@ -17,7 +17,7 @@
 ---
 ## Метрики
 
-Сервис предоставляет метрики в формате Prometheus по адресу: `http://localhost:9090/metrics` (порт и путь настраиваются в конфигурации).
+Сервис предоставляет метрики в формате Prometheus по адресу: `http://localhost:9091/metrics` (порт и путь настраиваются в конфигурации).
 
 Поддерживаются следующие метрики:
 - HTTP-запросы (время выполнения, количество)
@@ -30,10 +30,15 @@
 
 ## 🚀 Быстрый старт
 
+> 💡 Все команды можно скопировать и вставить напрямую.
+> Для работы требуется: `go`, `docker`, `docker-compose`, `make`.
+
 ### 1. Нативный запуск (Go)
 
+Используется для разработки и отладки. Запускается как локальный бинарник, читает переменные окружения.
+
 ```bash
-# 1. Создать конфигурацию (если ещё нет)
+# 1. Создать .env (если ещё нет)
 cp .env.example .env
 
 # 2. Собрать бинарник
@@ -43,6 +48,8 @@ make build-local
 make run-local
 ```
 
+✅ Работает на порту `8080`, метрики — `9090`.
+
 ---
 
 ### 2. Docker (dev и prod)
@@ -51,34 +58,42 @@ make run-local
 Исходники монтируются в контейнер, приложение запускается через `go run`. Позволяет вносить изменения в код без пересборки образа.
 
 ```bash
-# 1. Создать конфигурацию
+# 1. Создать .env
 cp .env.example .env
 
 # 2. Собрать образ (dev target)
 make build-dev
 
-# 3. Запустить контейнер с поддержкой горячей перезагрузки
+# 3. Запустить контейнер
 make run-dev
 ```
 
 #### 🔹 Prod-режим (для production)
+**Не использует `config.yaml`!** Всё берётся из `.env`.
 
 ```bash
-# 1. Создать .env (можно скопировать из .env.example)
+# 1. Создать .env
 cp .env.example .env
 
+# 2. Отредактировать .env (обязательно: DB, Kafka, MinIO)
 
-# 2. Собрать prod-образ
+# 3. Собрать prod-образ
 make prod-build
 
-# 3. Запустить prod-контейнер
+# 4. Запустить prod-контейнер
 make prod-run
 ```
+
+📌 **Важно**:
+- В `prod` режиме конфигурация загружается **только** из переменных окружения (`.env`).
+
 ---
 
 ### 3. Docker Compose (полный стек)
 
-#### 🔹 Dev-режим 
+Запускает всё: PostgreSQL, Kafka, MinIO, миграции и сам `task-manager` в одной команде.
+
+#### 🔹 Dev-режим (с горячей перезагрузкой кода)
 
 Исходники монтируются в контейнер, приложение запускается через `go run`.
 
@@ -90,9 +105,19 @@ cp .env.example .env
 make up-dev
 
 # Или напрямую:
-docker compose -f docker-compose.yaml -f docker-compose.dev.yaml --profile dev up --build
+docker compose -f docker-compose/base.yaml -f docker-compose/dev.yaml --profile dev up --build
 ```
-#### 🔹 Prod-режим
+
+✅ Автоматически:
+- создаёт БД и миграции,
+- инициализирует MinIO-бакет,
+- запускает `task-manager` в режиме `dev` (исходники монтируются, используется `go run cmd/api/main.go`),
+- открывает порты: `8080` (API), `9091` (метрики), `9000` (MinIO), `2181` (Zookeeper), `9092` (Kafka).
+
+#### 🔹 Prod-режим (оптимизированный образ)
+
+**Не использует `config.yaml`!** Всё берётся из `.env`.
+
 ```bash
 # 1. Создать .env (можно скопировать из .env.example)
 cp .env.example .env
@@ -101,8 +126,14 @@ cp .env.example .env
 make up-prod
 
 # Или напрямую:
-docker compose -f docker-compose.yaml -f docker-compose.prod.yaml --profile prod up --build
+docker compose -f docker-compose/base.yaml -f docker-compose/prod.yaml --profile prod up --build
 ```
+
+📌 **Важно**:
+- В `prod` режиме конфигурация загружается **только** из переменных окружения (`.env`).
+- Используется multi-stage build с оптимизированным образом.
+- Логирование в JSON формате для лучшей интеграции с системами мониторинга.
+
 #### 🔹 Остановка и управление
 
 ```bash
@@ -117,6 +148,16 @@ make status
 
 # Пересборка образа
 make build SERVICE=task-manager
+```
+
+#### 🔹 Структура файлов
+
+```
+docker-compose/
+├── base.yaml       # Базовая инфраструктура (БД, Kafka, MinIO)
+├── dev.yaml        # Dev профиль (go run, volume с кодом)
+├── prod.yaml       # Prod профиль (бинарник)
+└── standalone.yaml # Только инфраструктура
 ```
 
 ---
@@ -134,7 +175,7 @@ LOGGER_FORMAT=text          # text, json (prod использует json)
 LOGGER_MODE=stdout          # stdout или files
 ```
 
-- `mode: stdout` — логи выводятся в терминал.
+- `mode: stdout` — логи выводятся в терминал (подходит для Docker и разработки).
 - `mode: files` — логи пишутся в файлы (требует указания путей в конфиге).
 
 ### Переменные окружения
@@ -163,13 +204,16 @@ MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=documents
 ```
+
+> Полный список переменных можно получить из `.env.example` и кода (пакет `config`).
+
 ---
 
 ## 📚 Дополнительно
 
-- [Подробная документация по Docker](doc/DOCKER.md)  
-- `make help` — показать все доступные команды  
-- `make logs` — посмотреть логи контейнера  
+- [Подробная документация по Docker](doc/DOCKER.md)
+- `make help` — показать все доступные команды
+- `make logs` — посмотреть логи контейнера
 - `make test-all` — запустить все тесты (unit + integration)
 
 ---

@@ -14,7 +14,7 @@
 # =============================================================================
 
 # Default values (можно переопределить через CLI или окружение)
-NAME_C ?= task-manager-app
+NAME_C ?= tm-task-manager
 PORT_C ?= 8080
 MPORT_C ?= 9090
 NET_C ?= bridge
@@ -60,10 +60,13 @@ help:
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make up" "- запустить prod профиль (по умолчанию)"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make up-dev" "- запустить dev профиль (hot reload)"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make up-prod" "- запустить prod профиль"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make up-standalone" "- запустить только инфраструктуру"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make down" "- остановить все сервисы"
-	@printf "$(GREEN)%-20s$(RESET) %s\n" "make logs" "- показать логи (SERVICE=xxx)"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make switch-dev" "- переключиться на dev режим"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make switch-prod" "- переключиться на prod режим"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make logs SERVICE=xxx" "- показать логи сервиса"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make status" "- показать статус сервисов"
-	@printf "$(GREEN)%-20s$(RESET) %s\n" "make build" "- пересобрать сервис (SERVICE=xxx)"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make build SERVICE=xxx" "- пересобрать сервис"
 	@echo ""
 	@printf "$(BOLD)$(CYAN)Development:$(RESET)\n"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make build-dev" "- собрать dev образ"
@@ -113,6 +116,9 @@ help:
 	@printf "$(CYAN)Примеры:$(RESET)\n"
 	@printf "  $(GREEN)make up-dev$(RESET)                    # Dev режим с hot reload\n"
 	@printf "  $(GREEN)make up-prod$(RESET)                   # Prod режим\n"
+	@printf "  $(GREEN)make up-standalone$(RESET)             # Только инфраструктура (БД, Kafka, MinIO)\n"
+	@printf "  $(GREEN)make switch-dev$(RESET)                # Переключиться на dev (остановить prod)\n"
+	@printf "  $(GREEN)make switch-prod$(RESET)               # Переключиться на prod (остановить dev)\n"
 	@printf "  $(GREEN)make logs SERVICE=task-manager$(RESET) # Логи приложения\n"
 	@printf "  $(GREEN)make build SERVICE=task-manager$(RESET)# Пересобрать приложение\n"
 
@@ -165,6 +171,8 @@ up: compose-prod-d
 # Docker Compose Management (Profiles)
 # =============================================================================
 
+COMPOSE_DIR = docker-compose
+
 # По умолчанию используем prod профиль
 up: compose-prod
 
@@ -174,38 +182,68 @@ up-dev: compose-dev
 # Prod режим (оптимизированный образ)
 up-prod: compose-prod
 
+# Standalone режим (только инфраструктура)
+up-standalone: compose-standalone
+
 # Остановить все сервисы
 down: compose-down
 
 # Логи
 compose-logs:
-	docker compose logs -f $(SERVICE)
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml -f $(COMPOSE_DIR)/prod.yaml logs -f $(SERVICE)
 
 # Статус
 compose-status:
-	docker compose ps
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml -f $(COMPOSE_DIR)/prod.yaml ps
 
 # Перезапуск
 compose-restart:
-	docker compose restart
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml -f $(COMPOSE_DIR)/prod.yaml restart $(SERVICE)
 
 # Сборка
 compose-build:
-	docker compose build $(SERVICE)
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml -f $(COMPOSE_DIR)/prod.yaml build $(SERVICE)
 
 # Dev профиль (фон)
 compose-dev:
 	@echo "Запуск в DEV режиме"
-	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml --profile dev up -d --build
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml --profile dev up -d --build
+
+# Dev профиль (с выводом логов)
+compose-dev-d: compose-dev
+	@echo "Открываем логи..."
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml --profile dev logs -f
 
 # Prod профиль (фон)
 compose-prod:
 	@echo "Запуск в PROD режиме"
-	docker compose -f docker-compose.yaml -f docker-compose.prod.yaml --profile prod up -d --build
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/prod.yaml --profile prod up -d --build
+
+# Prod профиль (с выводом логов)
+compose-prod-d: compose-prod
+	@echo "Открываем логи..."
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/prod.yaml --profile prod logs -f
+
+# Standalone профиль (только инфраструктура, фон)
+compose-standalone:
+	@echo "Запуск инфраструктуры (standalone)..."
+	docker compose -f $(COMPOSE_DIR)/base.yaml --profile standalone up -d
 
 # Остановить все сервисы
 compose-down:
-	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml -f docker-compose.prod.yaml --profile dev --profile prod down
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml -f $(COMPOSE_DIR)/prod.yaml --profile dev --profile prod down --remove-orphans
+
+# Переключиться на dev (остановить prod, запустить dev)
+switch-dev:
+	@echo "Переключение на DEV режим..."
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/prod.yaml --profile prod down
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml --profile dev up -d --build
+
+# Переключиться на prod (остановить dev, запустить prod)
+switch-prod:
+	@echo "Переключение на PROD режим..."
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/dev.yaml --profile dev down
+	docker compose -f $(COMPOSE_DIR)/base.yaml -f $(COMPOSE_DIR)/prod.yaml --profile prod up -d --build
 
 # Логи сервисов
 logs: compose-logs
@@ -239,7 +277,9 @@ test-all:
 build-dev:
 	docker build \
 		--target dev \
-		-t $(container_name):dev .
+		-t $(container_name):dev \
+		-f Dockerfile \
+		.
 
 run-dev:
 	docker run -d \
@@ -262,7 +302,9 @@ prod-build:
 		--target prod \
 		$(container_build_args) \
 		$(CACHE_OPT) \
-		-t $(container_name):prod .
+		-t $(container_name):prod \
+		-f Dockerfile \
+		.
 
 prod-run:
 	docker run -d \

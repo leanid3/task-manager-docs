@@ -1,84 +1,76 @@
 # ============================================
-# Стадия сборки (общая для dev и prod)
+# Базовый образ
 # ============================================
-FROM golang:1.25 AS builder
+FROM golang:1.25 AS base-build
 
-# Устанавливаем зависимости для компиляции confluent-kafka-go (требует CGO)
+# Устанавливаем зависимости
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     librdkafka-dev \
     pkg-config \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
-# Копируем go.mod и go.sum для кэширования зависимостей
+# Кэширование зависимостей
 COPY go.mod go.sum ./
 RUN go mod download
 
 # Устанавливаем swag для генерации swagger документации
 RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
 
-# Копируем исходники
+# ============================================
+# Сборка приложения
+# ============================================
+FROM base-build AS builder
+
+WORKDIR /build
+
+# Копируем весь исходный код для корректной работы swag
 COPY . .
 
 # Генерируем swagger документацию
 RUN swag init -g cmd/api/main.go -o docs --parseDependency --parseInternal
 
-# Собираем бинарник с включенным CGO (требуется для confluent-kafka-go)
+# Собираем бинарник с включенным CGO
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o app ./cmd/api
 
 # ============================================
-# Dev образ - для разработки с go run
+# Dev образ
 # ============================================
-FROM golang:1.25 AS dev
-
-# Устанавливаем зависимости для компиляции confluent-kafka-go (требует CGO)
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    librdkafka-dev \
-    pkg-config \
-    ca-certificates \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Устанавливаем air для hot reload
-RUN go install github.com/air-verse/air@latest
-
+FROM base-build AS dev
 WORKDIR /app
 
-# Копируем go.mod и go.sum для кэширования зависимостей
+# Копируем только go.mod и go.sum для кэширования зависимостей
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Копируем исходники
-COPY . .
-
-# Устанавливаем swag для генерации swagger документации
-RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
-
-# Генерируем swagger документацию
-RUN swag init -g cmd/api/main.go -o docs --parseDependency --parseInternal
+# Устанавливаем air для hot reload (опционально)
+RUN go install github.com/air-verse/air@latest
 
 ENV SERVER_PORT=8080
+ENV SERVER_HOST=0.0.0.0
 EXPOSE ${SERVER_PORT}
 
-# CMD будет переопределён в docker-compose для запуска go run или air
+# Исходники монтируются через volume в docker-compose
+# Генерация swagger происходит при запуске через команду
 CMD ["go", "run", "cmd/api/main.go"]
 
 # ============================================
-# Базовый образ runtime (общий слой для prod)
+# Базовый образ runtime
 # ============================================
 FROM debian:bookworm-slim AS base
 
-# Устанавливаем runtime зависимости для confluent-kafka-go
+# Устанавливаем runtime зависимости
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     librdkafka1 \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 appuser
+
 
 WORKDIR /app
 
@@ -86,21 +78,16 @@ WORKDIR /app
 COPY --from=builder /build/app .
 
 # Создаём пользователя без прав root
-RUN useradd -m -u 1000 appuser
 USER appuser
 
 ENV SERVER_PORT=8080
+ENV SERVER_HOST=0.0.0.0
 EXPOSE ${SERVER_PORT}
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${SERVER_PORT}/health/live || exit 1
 
-# ============================================
-# Prod образ (использует только переменные окружения из .env)
-# ============================================
-FROM base AS prod
 
-# В prod режиме конфигурация загружается только из переменных окружения
-# Файл config.yaml не копируется - используется .env
+FROM base AS prod
 
 CMD ["./app"]

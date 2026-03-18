@@ -1,0 +1,111 @@
+# ============================================================================
+# Task Manager - Production Profile
+# ============================================================================
+# Prod режим с оптимизированным образом
+#
+# Использование:
+#   docker compose -f docker-compose/base.yaml -f docker-compose/prod.yaml --profile prod up --build
+# ============================================================================
+
+services:
+  # ============================================================================
+  # Task Manager Application (Prod)
+  # ============================================================================
+  task-manager:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: prod
+    container_name: tm-task-manager
+    depends_on:
+      task-manager-database:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      tm-minio-init:
+        condition: service_completed_successfully
+      task-manager-migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ../.env
+    environment:
+      # Server
+      - SERVER_PORT=${SERVER_PORT:-8080}
+      - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
+      - SERVER_PREFORK=${SERVER_PREFORK:-false}
+      - SERVER_TIMEOUT=${SERVER_TIMEOUT:-30s}
+      - SERVER_READ_TIMEOUT=${SERVER_READ_TIMEOUT:-10s}
+      - SERVER_WRITE_TIMEOUT=${SERVER_WRITE_TIMEOUT:-10s}
+      - SERVER_SHUTDOWN_TIMEOUT=${SERVER_SHUTDOWN_TIMEOUT:-5s}
+      # Database
+      - DATABASE_HOST=${DATABASE_HOST:-task-manager-database}
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
+      - DATABASE_USER=${POSTGRES_USER:-postgres}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - DATABASE_DATABASE=${TASK_MANAGER_POSTGRES_DB:-task_manager}
+      - DATABASE_MAX_CONNECTIONS=${DATABASE_MAX_CONNECTIONS:-25}
+      - DATABASE_MIN_CONNECTIONS=${DATABASE_MIN_CONNECTIONS:-5}
+      - DATABASE_MAX_CONN_LIFETIME=${DATABASE_MAX_CONN_LIFETIME:-1h}
+      - DATABASE_MAX_CONN_IDLE_TIME=${DATABASE_MAX_CONN_IDLE_TIME:-30m}
+      # Broker (Kafka)
+      - BROKER_BOOTSTRAP_SERVICE=${BROKER_BOOTSTRAP_SERVICE:-kafka:29092}
+      - BROKER_CLIENT_ID=${BROKER_CLIENT_ID:-task_manager_1_client}
+      - BROKER_TOPICS=${BROKER_TOPICS:-tasks_llm}
+      - BROKER_PRODUCER_ACKS=${BROKER_PRODUCER_ACKS:--1}
+      - BROKER_PRODUCER_IDEMPOTENCE=${BROKER_PRODUCER_IDEMPOTENCE:-true}
+      - BROKER_PRODUCER_COMPRESSION=${BROKER_PRODUCER_COMPRESSION:-snappy}
+      - BROKER_PRODUCER_RETRIES=${BROKER_PRODUCER_RETRIES:-3}
+      - BROKER_PRODUCER_BATCH_SIZE=${BROKER_PRODUCER_BATCH_SIZE:-16384}
+      - BROKER_PRODUCER_LINGER_MS=${BROKER_PRODUCER_LINGER_MS:-10}
+      - BROKER_PRODUCER_MAX_FLIGHT_REQUESTS=${BROKER_PRODUCER_MAX_FLIGHT_REQUESTS:-5}
+      - BROKER_PRODUCER_TIMEOUT_MS=${BROKER_PRODUCER_TIMEOUT_MS:-30000}
+      - BROKER_CONSUMER_GROUP_ID=${BROKER_CONSUMER_GROUP_ID:-task_llm_group}
+      - BROKER_CONSUMER_AUTO_COMMIT=${BROKER_CONSUMER_AUTO_COMMIT:-true}
+      - BROKER_CONSUMER_COMMIT_INTERVAL_MS=${BROKER_CONSUMER_COMMIT_INTERVAL_MS:-5000}
+      - BROKER_CONSUMER_SESSION_TIMEOUT_MS=${BROKER_CONSUMER_SESSION_TIMEOUT_MS:-30000}
+      - BROKER_CONSUMER_HEARTBEAT_INTERVAL_MS=${BROKER_CONSUMER_HEARTBEAT_INTERVAL_MS:-10000}
+      - BROKER_CONSUMER_MAX_POLL_RECORDS=${BROKER_CONSUMER_MAX_POLL_RECORDS:-500}
+      - BROKER_SECURITY_PROTOCOL=${BROKER_SECURITY_PROTOCOL:-PLAINTEXT}
+      - BROKER_SASL_MECHANISM=${BROKER_SASL_MECHANISM:-}
+      - BROKER_SASL_USERNAME=${BROKER_SASL_USERNAME:-}
+      - BROKER_SASL_PASSWORD=${BROKER_SASL_PASSWORD:-}
+      - BROKER_SSL_CERTIFICATE_VERIFICATION=${BROKER_SSL_CERTIFICATE_VERIFICATION:-false}
+      # MinIO
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_BUCKET=${MINIO_BUCKET:-documents}
+      - MINIO_PREFIX=${MINIO_PREFIX:-uploads}
+      - MINIO_USESSL=${MINIO_USESSL:-false}
+      - MINIO_REGION=${MINIO_REGION:-us-east-1}
+      - MINIO_TIMEOUT=${MINIO_TIMEOUT:-30s}
+      # Logger
+      - LOGGER_LEVEL=${LOGGER_LEVEL:-info}
+      - LOGGER_FORMAT=${LOGGER_FORMAT:-json}
+      - LOGGER_MODE=${LOGGER_MODE:-stdout}
+      # Metrics
+      - METRICS_ENABLED=${METRICS_ENABLED:-true}
+      - METRICS_PORT=${METRICS_PORT:-9091}
+      - METRICS_HOST=${METRICS_HOST:-0.0.0.0}
+      - METRICS_PATH=${METRICS_PATH:-/metrics}
+      # Swagger
+      - SWAGGER_ENABLED=${SWAGGER_ENABLED:-true}
+      - SWAGGER_PATH=${SWAGGER_PATH:-/swagger}
+    volumes:
+      - ../logs:/app/logs
+    ports:
+      - "${TASK_MANAGER_HTTP_PORT:-8080}:8080"
+      - "8000:8000"
+    networks:
+      - task-manager-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - prod
