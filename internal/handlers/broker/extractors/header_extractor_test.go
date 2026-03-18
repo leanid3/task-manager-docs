@@ -162,7 +162,7 @@ func TestHeaderExtractor_ExtractAll(t *testing.T) {
 	t.Run("successful extraction of all headers", func(t *testing.T) {
 		traceID := uuid.New()
 		workerID := "worker-123"
-		
+
 		headers := []kafka.Header{
 			{Key: "status", Value: []byte("200")},
 			{Key: "worker_id", Value: []byte(workerID)},
@@ -180,7 +180,7 @@ func TestHeaderExtractor_ExtractAll(t *testing.T) {
 	t.Run("missing status header", func(t *testing.T) {
 		traceID := uuid.New()
 		workerID := "worker-123"
-		
+
 		headers := []kafka.Header{
 			{Key: "worker_id", Value: []byte(workerID)},
 			{Key: "trace_id", Value: []byte(traceID.String())},
@@ -195,7 +195,7 @@ func TestHeaderExtractor_ExtractAll(t *testing.T) {
 
 	t.Run("missing worker_id header", func(t *testing.T) {
 		traceID := uuid.New()
-		
+
 		headers := []kafka.Header{
 			{Key: "status", Value: []byte("200")},
 			{Key: "trace_id", Value: []byte(traceID.String())},
@@ -210,7 +210,7 @@ func TestHeaderExtractor_ExtractAll(t *testing.T) {
 
 	t.Run("missing trace_id header", func(t *testing.T) {
 		workerID := "worker-123"
-		
+
 		headers := []kafka.Header{
 			{Key: "status", Value: []byte("200")},
 			{Key: "worker_id", Value: []byte(workerID)},

@@ -435,15 +435,15 @@ build-local:
 
 run-local:
 	@echo "Запуск приложения локально..."
-	@if [ ! -f config.yaml ]; then \
-		echo "Ошибка: config.yaml не найден. Создайте его из config.example.yaml"; \
+	@if [ ! -f .env ]; then \
+		echo "Ошибка: .env не найден. Создайте его из .env.example"; \
 		exit 1; \
 	fi
 	@if [ ! -f bin/$(BINARY_NAME) ]; then \
 		echo "Бинарник не найден. Собираю..."; \
 		$(MAKE) build-local; \
 	fi
-	./bin/$(BINARY_NAME)
+	set -a && . ./.env && set +a && ./bin/$(BINARY_NAME)
 
 # =============================================================================
 # Cleanup

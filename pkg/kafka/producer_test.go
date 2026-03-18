@@ -193,7 +193,7 @@ func verifyMessageDelivered(t *testing.T, brokers, topic string, expectedTaskID 
 		if string(receivedMsg.Key) != msg.ToKey() {
 			t.Errorf("Expected key %s, got %s", msg.ToKey(), string(receivedMsg.Key))
 		}
-		
+
 		// Проверяем заголовки
 		expectedHeaders := msg.ToHeaders()
 		for k, v := range expectedHeaders {
@@ -208,7 +208,7 @@ func verifyMessageDelivered(t *testing.T, brokers, topic string, expectedTaskID 
 				t.Errorf("Header %s=%s not found in received message", k, v)
 			}
 		}
-		
+
 		// Проверяем значение
 		if string(receivedMsg.Value) != string(msg.ToValue()) {
 			t.Errorf("Expected value %s, got %s", string(msg.ToValue()), string(receivedMsg.Value))

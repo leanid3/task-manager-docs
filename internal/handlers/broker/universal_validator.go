@@ -62,7 +62,7 @@ func (v *UniversalValidator) Validate(msg *kafka.Message) (*domain.TaskEvent, er
 			TaskID: taskID,
 		},
 		Headers: *headers,
-		Value: payload,
+		Value:   payload,
 	}
 
 	return event, nil

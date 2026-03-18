@@ -10,6 +10,5 @@ type BrokerCommand[T any] struct {
 	Value   T
 }
 
-
 // Для обратной совместимости можно использовать псевдоним.
 // type TaskCommand = BrokerCommand[any]

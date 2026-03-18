@@ -20,53 +20,52 @@ type TaskProcessor interface {
 	GetTimeout() time.Duration
 }
 
-
 // TaskEvent универсальное событие для всех типов задач
 type TaskEvent struct {
-	Key     TaskContractKey      `json:"key"`
-	Headers TaskContractHeaders  `json:"headers"`
-	Value   interface{}          `json:"value"`
+	Key     TaskContractKey     `json:"key"`
+	Headers TaskContractHeaders `json:"headers"`
+	Value   interface{}         `json:"value"`
 }
 
 // TaskType тип задачи
 type TaskType string
 
 const (
-	TaskTypeLLM       TaskType = "llm"
-	TaskTypeParsing   TaskType = "parsing"
+	TaskTypeLLM        TaskType = "llm"
+	TaskTypeParsing    TaskType = "parsing"
 	TaskTypeAlgorithms TaskType = "algorithms"
-	TaskTypeAnalyze   TaskType = "analyze"
+	TaskTypeAnalyze    TaskType = "analyze"
 )
 
 // TaskDefinition определяет спецификацию задачи
 type TaskDefinition struct {
-	Type         TaskType           `json:"type"`
-	Name         string             `json:"name"`
-	Topic        string             `json:"topic"`
-	Timeout      time.Duration      `json:"timeout"`
-	MaxRetries   int                `json:"max_retries"`
-	StoragePath  string             `json:"storage_path"`
-	Enabled      bool               `json:"enabled"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Type        TaskType               `json:"type"`
+	Name        string                 `json:"name"`
+	Topic       string                 `json:"topic"`
+	Timeout     time.Duration          `json:"timeout"`
+	MaxRetries  int                    `json:"max_retries"`
+	StoragePath string                 `json:"storage_path"`
+	Enabled     bool                   `json:"enabled"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // TaskResult результат выполнения задачи
 type TaskResult struct {
-	TaskID       uuid.UUID         `json:"task_id"`
-	Status       TaskStatus        `json:"status"`
-	Result       json.RawMessage   `json:"result,omitempty"`
-	ErrorMessage string            `json:"error_message,omitempty"`
-	CompletedAt  *time.Time        `json:"completed_at,omitempty"`
+	TaskID       uuid.UUID       `json:"task_id"`
+	Status       TaskStatus      `json:"status"`
+	Result       json.RawMessage `json:"result,omitempty"`
+	ErrorMessage string          `json:"error_message,omitempty"`
+	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
 }
 
 // TaskInput входные данные для задачи
 type TaskInput struct {
-	TaskID    uuid.UUID                    `json:"task_id"`
-	Filename  string                       `json:"filename"`
-	Filesize  int64                        `json:"filesize"`
-	Reader    interface{}                  `json:"-"` // io.Reader не может быть сериализован
-	RequestID string                       `json:"request_id"`
-	Metadata  map[string]interface{}       `json:"metadata,omitempty"`
+	TaskID    uuid.UUID              `json:"task_id"`
+	Filename  string                 `json:"filename"`
+	Filesize  int64                  `json:"filesize"`
+	Reader    interface{}            `json:"-"` // io.Reader не может быть сериализован
+	RequestID string                 `json:"request_id"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // TaskProcessorFactory фабрика для создания обработчиков задач

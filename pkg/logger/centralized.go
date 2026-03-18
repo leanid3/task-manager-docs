@@ -113,11 +113,11 @@ func (h *CentralizedHandler) sendToCentralized(record slog.Record) {
 // formatLogEntry форматирует запись лога для отправки в централизованную систему
 func (h *CentralizedHandler) formatLogEntry(record slog.Record) map[string]interface{} {
 	entry := map[string]interface{}{
-		"timestamp":   record.Time.Format(time.RFC3339Nano),
-		"level":       record.Level.String(),
-		"message":     record.Message,
-		"service":     h.config.ServiceName,
-		"attributes":  make(map[string]interface{}),
+		"timestamp":  record.Time.Format(time.RFC3339Nano),
+		"level":      record.Level.String(),
+		"message":    record.Message,
+		"service":    h.config.ServiceName,
+		"attributes": make(map[string]interface{}),
 	}
 
 	// Добавляем атрибуты
@@ -209,13 +209,13 @@ func (e *LokiLogExporter) Export(logs []map[string]interface{}) error {
 
 	// Формируем структуру данных в формате Loki
 	streams := make([]map[string]interface{}, 0)
-	
+
 	for _, log := range logs {
 		labels := map[string]string{
 			"service": e.config.ServiceName,
 			"job":     "task-manager",
 		}
-		
+
 		// Добавляем дополнительные метки из атрибутов лога
 		if attrs, ok := log["attributes"].(map[string]interface{}); ok {
 			if category, exists := attrs["category"]; exists {
@@ -225,7 +225,7 @@ func (e *LokiLogExporter) Export(logs []map[string]interface{}) error {
 				labels["level"] = fmt.Sprintf("%v", level)
 			}
 		}
-		
+
 		stream := map[string]interface{}{
 			"stream": labels,
 			"values": [][]string{

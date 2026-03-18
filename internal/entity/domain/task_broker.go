@@ -37,6 +37,5 @@ type TaskContractKey struct {
 	TaskID uuid.UUID `json:"task_id"`
 }
 
-
 // TaskCommand универсальная команда для всех типов задач - только для DI
 // Заменено на BrokerCommand[T] в broker_command.go для обеспечения типобезопасности.

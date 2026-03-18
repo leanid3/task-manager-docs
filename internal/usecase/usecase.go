@@ -6,15 +6,15 @@ import (
 )
 
 type UseCases struct {
-	TaskLLMUC      TaskLLMUCInterface
-	UnifiedTaskUC  domain.TaskManager
-	MultiUploadUC  multiuploaduc.MultiUploadUCInterface
+	TaskLLMUC     TaskLLMUCInterface
+	UnifiedTaskUC domain.TaskManager
+	MultiUploadUC multiuploaduc.MultiUploadUCInterface
 }
 
 func NewUseCases(taskLLMUC TaskLLMUCInterface, unifiedTaskUC domain.TaskManager, multiUploadUC multiuploaduc.MultiUploadUCInterface) *UseCases {
 	return &UseCases{
-		TaskLLMUC:      taskLLMUC,
-		UnifiedTaskUC:  unifiedTaskUC,
-		MultiUploadUC:  multiUploadUC,
+		TaskLLMUC:     taskLLMUC,
+		UnifiedTaskUC: unifiedTaskUC,
+		MultiUploadUC: multiUploadUC,
 	}
 }

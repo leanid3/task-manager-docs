@@ -45,10 +45,10 @@ type DefaultTimeoutManager struct {
 func NewDefaultTimeoutManager() *DefaultTimeoutManager {
 	return &DefaultTimeoutManager{
 		timeouts: map[string]time.Duration{
-			"llm":       300 * time.Second,  // 5 минут
-			"parsing":   120 * time.Second,  // 2 минуты
+			"llm":        300 * time.Second, // 5 минут
+			"parsing":    120 * time.Second, // 2 минуты
 			"algorithms": 60 * time.Second,  // 1 минута
-			"analyze":   180 * time.Second,  // 3 минуты
+			"analyze":    180 * time.Second, // 3 минуты
 		},
 	}
 }
@@ -100,7 +100,7 @@ func (mrl *MemoryRateLimiter) Allow(key string) bool {
 // AllowN проверяет, разрешено ли N запросов
 func (mrl *MemoryRateLimiter) AllowN(key string, n int) bool {
 	now := time.Now()
-	
+
 	bucket, exists := mrl.limits[key]
 	if !exists {
 		// Устанавливаем стандартные лимиты (например, 10 запросов в минуту)
@@ -209,10 +209,10 @@ func NewDefaultTaskLimitsChecker() *DefaultTaskLimitsChecker {
 	return &DefaultTaskLimitsChecker{
 		userLimits: make(map[string]*userUsage),
 		taskLimits: map[string]int64{
-			"llm":       100 * 1024 * 1024,      // 100MB
-			"parsing":   50 * 1024 * 1024,       // 50MB
-			"algorithms": 25 * 1024 * 1024,      // 25MB
-			"analyze":   75 * 1024 * 1024,       // 75MB
+			"llm":        100 * 1024 * 1024, // 100MB
+			"parsing":    50 * 1024 * 1024,  // 50MB
+			"algorithms": 25 * 1024 * 1024,  // 25MB
+			"analyze":    75 * 1024 * 1024,  // 75MB
 		},
 	}
 }
@@ -221,7 +221,7 @@ func NewDefaultTaskLimitsChecker() *DefaultTaskLimitsChecker {
 func (dtlc *DefaultTaskLimitsChecker) CheckLimits(ctx context.Context, taskID uuid.UUID, taskType string, userID string) error {
 	now := time.Now()
 	usage, exists := dtlc.userLimits[userID]
-	
+
 	if !exists || now.Sub(usage.lastReset) >= 24*time.Hour {
 		// Сброс дневной статистики
 		usage = &userUsage{
@@ -246,6 +246,6 @@ func (dtlc *DefaultTaskLimitsChecker) UpdateUsage(taskID uuid.UUID, taskType str
 	if !exists {
 		return // Это может быть ошибка, но для упрощения игнорируем
 	}
-	
+
 	usage.taskCount++
 }

@@ -18,7 +18,7 @@ type Interface interface {
 	Error(msg string, args ...interface{})
 	ErrorWithSkip(skip int, msg string, args ...interface{})
 	Fatal(msg string, args ...interface{})
-	
+
 	// Методы с поддержкой контекста для передачи корреляционных ID
 	InfoCtx(ctx context.Context, msg string, args ...interface{})
 	DebugCtx(ctx context.Context, msg string, args ...interface{})

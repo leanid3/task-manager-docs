@@ -39,7 +39,6 @@ type Task interface {
 	SetCompletedAt(t time.Time)
 }
 
-
 // BaseTask — базовая структура, которая реализует интерфейс Task.
 // Все специфичные задачи (TaskLLM, TaskParsing и т.д.) будут embed-ить эту структуру.
 // Определение BaseTask находится в base_task.go.

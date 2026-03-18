@@ -3,8 +3,8 @@ package broker
 import (
 	"context"
 
-	apperrors "app/internal/entity/errors"
 	"app/internal/entity/domain"
+	apperrors "app/internal/entity/errors"
 	"app/pkg/logger"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"

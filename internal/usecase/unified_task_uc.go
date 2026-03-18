@@ -12,8 +12,8 @@ import (
 
 // UnifiedTaskUC универсальный usecase для обработки различных типов задач
 type UnifiedTaskUC struct {
-	taskRepo      repository.Task
-	storageRepo   repository.Storage
+	taskRepo             repository.Task
+	storageRepo          repository.Storage
 	taskProcessorFactory domain.TaskProcessorFactory
 }
 
@@ -24,8 +24,8 @@ func NewUnifiedTaskUC(
 	taskProcessorFactory domain.TaskProcessorFactory,
 ) *UnifiedTaskUC {
 	return &UnifiedTaskUC{
-		taskRepo:      taskRepo,
-		storageRepo:   storageRepo,
+		taskRepo:             taskRepo,
+		storageRepo:          storageRepo,
 		taskProcessorFactory: taskProcessorFactory,
 	}
 }

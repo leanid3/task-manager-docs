@@ -25,9 +25,9 @@ const (
 type ErrorSeverity string
 
 const (
-	ErrorSeverityLow    ErrorSeverity = "low"
-	ErrorSeverityMedium ErrorSeverity = "medium"
-	ErrorSeverityHigh   ErrorSeverity = "high"
+	ErrorSeverityLow      ErrorSeverity = "low"
+	ErrorSeverityMedium   ErrorSeverity = "medium"
+	ErrorSeverityHigh     ErrorSeverity = "high"
 	ErrorSeverityCritical ErrorSeverity = "critical"
 )
 

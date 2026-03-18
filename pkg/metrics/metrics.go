@@ -1,9 +1,9 @@
 package metrics
 
 import (
-	"runtime"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"runtime"
 )
 
 // TODO возможно вынести в метод

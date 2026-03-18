@@ -36,8 +36,8 @@ type Config struct {
 	Server struct {
 		Timeout int `mapstructure:"timeout"`
 	} `mapstructure:"server"`
-	MaxFileSize int64 `mapstructure:"max_file_size"` // максимальный размер файла в байтах
-	MaxFileCount int  `mapstructure:"max_file_count"` // максимальное количество файлов
+	MaxFileSize  int64 `mapstructure:"max_file_size"`  // максимальный размер файла в байтах
+	MaxFileCount int   `mapstructure:"max_file_count"` // максимальное количество файлов
 }
 
 type Logger interface {

@@ -1,13 +1,14 @@
 package handlers
 
 import (
+	"net/http"
+
 	"app/config"
 	"app/internal/handlers/restapi/middleware"
 	v1 "app/internal/handlers/restapi/v1"
 	"app/internal/usecase"
 	"app/pkg/logger"
 	"app/pkg/response"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -15,7 +16,6 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"app/pkg/metrics"
-	_ "app/docs" // swagger docs
 )
 
 // @title Document Processing API Gateway
@@ -46,19 +46,19 @@ func NewRoutes(engine *gin.Engine, cfg *config.Config, uc usecase.UseCases, l lo
 		})
 	}
 
-	//Metrics(recommended by Prometheus)
+	// Metrics(recommended by Prometheus)
 	if cfg.Metrics.Enabled {
 		engine.GET(cfg.Metrics.Path, gin.WrapH(promhttp.HandlerFor(metrics.GetRegistry(), promhttp.HandlerOpts{
 			// Опционально: настройка обработчика
 		})))
 	}
 
-	//Swagger documentation
+	// Swagger documentation
 	if cfg.Swagger.Enabled {
 		engine.GET(cfg.Swagger.Path+"/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 	}
 
-	//API v1
+	// API v1
 	apiV1Group := engine.Group("/api/v1")
 	{
 		v1.NewV1Routes(apiV1Group, uc, cfg, l)
