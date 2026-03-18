@@ -6,6 +6,8 @@
 .PHONY: fmt vet lint swagger swagger-clean
 .PHONY: build-local run-local clean clean-all clean-logs
 .PHONY: check pre-commit shell exec version info config-check
+.PHONY: compose-dev compose-prod compose-down compose-logs compose-status
+.PHONY: up up-dev up-prod down logs status restart build
 
 # =============================================================================
 # Variables Configuration
@@ -54,15 +56,24 @@ RESET := \033[0m
 help:
 	@printf "$(CYAN)%-20s$(RESET) %s\n" "Makefile commands:" ""
 	@echo ""
+	@printf "$(BOLD)$(CYAN)Docker Compose (Profiles):$(RESET)\n"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make up" "- запустить prod профиль (по умолчанию)"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make up-dev" "- запустить dev профиль (hot reload)"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make up-prod" "- запустить prod профиль"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make down" "- остановить все сервисы"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make logs" "- показать логи (SERVICE=xxx)"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make status" "- показать статус сервисов"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make build" "- пересобрать сервис (SERVICE=xxx)"
+	@echo ""
 	@printf "$(BOLD)$(CYAN)Development:$(RESET)\n"
-	@printf "$(GREEN)%-20s$(RESET) %s\n" "make build-dev" "- собрать образ в dev среде"
-	@printf "$(GREEN)%-20s$(RESET) %s\n" "make run-dev" "- запустить контейнер в dev среде"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make build-dev" "- собрать dev образ"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make run-dev" "- запустить dev контейнер"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make build-local" "- собрать локальный бинарник"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make run-local" "- запустить локально (без Docker)"
 	@echo ""
 	@printf "$(BOLD)$(CYAN)Production:$(RESET)\n"
-	@printf "$(GREEN)%-20s$(RESET) %s\n" "make prod-build" "- собрать образ в prod среде"
-	@printf "$(GREEN)%-20s$(RESET) %s\n" "make prod-run" "- запустить контейнер в prod среде"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make prod-build" "- собрать prod образ"
+	@printf "$(GREEN)%-20s$(RESET) %s\n" "make prod-run" "- запустить prod контейнер"
 	@echo ""
 	@printf "$(BOLD)$(CYAN)Testing:$(RESET)\n"
 	@printf "$(GREEN)%-20s$(RESET) %s\n" "make test-unit" "- запустить unit тесты"
@@ -84,11 +95,7 @@ help:
 	@printf "$(YELLOW)%-20s$(RESET) %s\n" "make rm-image" "- удалить образ"
 	@printf "$(YELLOW)%-20s$(RESET) %s\n" "make rm-container" "- удалить контейнер"
 	@printf "$(YELLOW)%-20s$(RESET) %s\n" "make rm-all" "- удалить всё"
-	@printf "$(BLUE)%-20s$(RESET) %s\n" "make logs" "- показать логи"
-	@printf "$(BLUE)%-20s$(RESET) %s\n" "make status" "- показать статус"
-	@printf "$(BLUE)%-20s$(RESET) %s\n" "make stop" "- остановить контейнер"
-	@printf "$(BLUE)%-20s$(RESET) %s\n" "make restart" "- перезапустить"
-	@printf "$(BLUE)%-20s$(RESET) %s\n" "make shell" "- войти в контейнер (shell)"
+	@printf "$(BLUE)%-20s$(RESET) %s\n" "make shell" "- войти в контейнер"
 	@printf "$(BLUE)%-20s$(RESET) %s\n" "make exec" "- выполнить команду в контейнере"
 	@echo ""
 	@printf "$(BOLD)$(CYAN)Cleanup:$(RESET)\n"
@@ -102,6 +109,12 @@ help:
 	@printf "$(BLUE)%-20s$(RESET) %s\n" "make config-check" "- проверить конфигурацию"
 	@echo ""
 	@printf "$(CYAN)Подсказка:$(RESET) используй $(GREEN)make help-vars$(RESET) для списка переменных\n"
+	@echo ""
+	@printf "$(CYAN)Примеры:$(RESET)\n"
+	@printf "  $(GREEN)make up-dev$(RESET)                    # Dev режим с hot reload\n"
+	@printf "  $(GREEN)make up-prod$(RESET)                   # Prod режим\n"
+	@printf "  $(GREEN)make logs SERVICE=task-manager$(RESET) # Логи приложения\n"
+	@printf "  $(GREEN)make build SERVICE=task-manager$(RESET)# Пересобрать приложение\n"
 
 help-vars:
 	@echo ""
@@ -137,16 +150,74 @@ pr: prod-run
 rmi: rm-image
 rmc: rm-container
 ra: rm-all
-l: logs
-s: status
-st: stop
-rs: restart
 dt: deps-tidy
 dv: deps-verify
 du: deps-update
 sw: swagger
 v: version
 i: info
+
+# Docker compose shortcuts
+ud: compose-dev-d
+up: compose-prod-d
+
+# =============================================================================
+# Docker Compose Management (Profiles)
+# =============================================================================
+
+# По умолчанию используем prod профиль
+up: compose-prod
+
+# Dev режим (с горячей перезагрузкой кода)
+up-dev: compose-dev
+
+# Prod режим (оптимизированный образ)
+up-prod: compose-prod
+
+# Остановить все сервисы
+down: compose-down
+
+# Логи
+compose-logs:
+	docker compose logs -f $(SERVICE)
+
+# Статус
+compose-status:
+	docker compose ps
+
+# Перезапуск
+compose-restart:
+	docker compose restart
+
+# Сборка
+compose-build:
+	docker compose build $(SERVICE)
+
+# Dev профиль (фон)
+compose-dev:
+	@echo "Запуск в DEV режиме"
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml --profile dev up -d --build
+
+# Prod профиль (фон)
+compose-prod:
+	@echo "Запуск в PROD режиме"
+	docker compose -f docker-compose.yaml -f docker-compose.prod.yaml --profile prod up -d --build
+
+# Остановить все сервисы
+compose-down:
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml -f docker-compose.prod.yaml --profile dev --profile prod down
+
+# Логи сервисов
+logs: compose-logs
+
+# Статус сервисов
+status: compose-status
+
+# Перезапуск сервисов
+restart: compose-restart
+
+# Сборка сервисов
+build: compose-build
 
 # =============================================================================
 # Tests
@@ -168,8 +239,6 @@ test-all:
 build-dev:
 	docker build \
 		--target dev \
-		$(container_build_args) \
-		$(CACHE_OPT) \
 		-t $(container_name):dev .
 
 run-dev:
@@ -178,9 +247,11 @@ run-dev:
 		-p $(container_port):$(container_port) \
 		-p $(container_metrics_port):$(container_metrics_port) \
 		$(if $(wildcard .env),--env-file .env,) \
+		-v $(CURDIR):/app \
 		-v $(logs_volume):/app/logs \
 		--network $(container_network) \
-		$(container_name):dev
+		$(container_name):dev \
+		go run cmd/api/main.go
 
 # =============================================================================
 # Prod Application

@@ -28,9 +28,11 @@ import (
 )
 
 func main() {
+	// Общий context
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	//Коннекторы
 	// Используем fallback logger до инициализации основного менеджера
 	fallbackLogger := logger.NewFallback()
 
@@ -41,9 +43,8 @@ func main() {
 	}
 
 	// Инициализация логгеров
-	// Конвертируем MaxSize из мегабайт в байты (если указано)
 	maxSizeBytes := cfg.Logger.MaxSize * 1024 * 1024
-	logMgr, err := logger.NewManager(logger.LoggerManagerConfig{
+	loggerConfig := logger.LoggerManagerConfig{
 		Level:        cfg.Logger.Level,
 		Format:       cfg.Logger.Format,
 		Mode:         cfg.Logger.Mode,
@@ -57,18 +58,19 @@ func main() {
 		MaxSize:      maxSizeBytes,
 		MaxFiles:     cfg.Logger.MaxFiles,
 		ClearOnStart: cfg.Logger.ClearOnStart,
-	})
+	}
+	logMgr, err := logger.NewManager(loggerConfig)
 	if err != nil {
-		fallbackLogger.Error("failed to init log manager", "error", err)
+		fallbackLogger.Error("failed to init general logger", "error", err)
 		os.Exit(1)
 	}
 	defer logMgr.Close()
+	l := logMgr.Get("app")
+	l.Info("logger manager initialized", "mode", cfg.Logger.Mode, "level", cfg.Logger.Level)
 
 	// Инициализация метрик
 	metrics.InitMetrics()
 
-	l := logMgr.Get("app")
-	l.Info("logger manager initialized", "mode", cfg.Logger.Mode, "level", cfg.Logger.Level)
 	// Подключение к базе данных
 	dbCfg := &database.Config{
 		Host:            cfg.Database.Host,
@@ -87,6 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	//Подключение к файловому хранилищю
 	minioCfg := &pkgminio.Config{
 		Endpoint:  cfg.Minio.Endpoint,
 		AccessKey: cfg.Minio.AccessKey,
@@ -103,27 +106,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	kafkaProducer, err := kafka.NewProducer(kafka.ProducerConfig{
+	//Подключение продюсера брокера сообщений
+	kafkaconfig := kafka.ProducerConfig{
 		BootstrapServers:          cfg.Broker.BootstrapService,
 		ClientID:                  cfg.Broker.ClientID,
 		ProducerAcks:              cfg.Broker.ProducerAcks,
 		ProducerEnableIdempotence: cfg.Broker.ProducerEnableIdempotence,
 		ProducerCompressionType:   cfg.Broker.ProducerCompressionType,
 		ProducerRetries:           cfg.Broker.ProducerRetries,
-	}, logMgr.Get("kafka"))
+	}
+	kafkaProducer, err := kafka.NewProducer(kafkaconfig, logMgr.Get("kafka"))
 	if err != nil {
 		l.Error("failed to create kafka connector", "error", err)
 		os.Exit(1)
 	}
 
+	//Логика
 	// Репозитории
 	taskRepo := postgres.NewTaskRepositoryWithMetrics(postgresConnector.Pool())
 	storageRepo := minio.NewMinioAdapterWithMetrics(minioConnector, logMgr.Get("minio"))
 
+	//Core пакеты
 	// Создаем ограничитель ресурсов
 	resourceLimiter := limits.NewSemaphoreResourceLimiter()
 	resourceLimiter.SetLimit("tasks", 100) // Максимум 100 одновременных задач
-
+	//TODO проверить связь с baseTaskUC
 	// Фабрика процессоров задач
 	taskProcessorFactory := usecase.NewTaskProcessorFactory()
 
@@ -133,16 +140,17 @@ func main() {
 	// Оборачиваем в декораторы
 	unifiedTaskUC := usecase.NewMetricsDecorator(
 		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("app")),
-		metrics.Default, // используем глобальный экземпляр метрик
+		metrics.Default,
 	)
 
+	//Custom usecase
 	// Создаем чистый TaskLLMUC
 	baseTaskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0])
 
 	// Оборачиваем в декораторы
 	taskLLMUC := usecase.NewMetricsDecoratorTaskLLM(
 		usecase.NewLoggingDecoratorTaskLLM(baseTaskLLMUC, logMgr.Get("task")),
-		metrics.Default, // используем глобальный экземпляр метрик
+		metrics.Default,
 	)
 
 	// Создаем MultiUploadUC
@@ -151,16 +159,16 @@ func main() {
 		kafkaProducer,
 		storageRepo,
 		cfg.Broker.Topics[0],
-		10, // максимальное количество одновременных загрузок
+		10,
 	)
 
 	// Оборачиваем в декораторы
 	multiUploadUC := usecase.NewMetricsDecoratorMultiUpload(
 		usecase.NewLoggingDecoratorMultiUpload(baseMultiUploadUC, logMgr.Get("task")),
-		metrics.Default, // используем глобальный экземпляр метрик
+		metrics.Default,
 	)
 
-	// Создаем usecases
+	// Сборка custom usecase в общий usecases
 	usecases := usecase.NewUseCases(
 		taskLLMUC,
 		unifiedTaskUC,
@@ -173,7 +181,7 @@ func main() {
 	// Оборачиваем в декораторы
 	decoratedUnifiedTaskUC := usecase.NewMetricsDecorator(
 		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("task")),
-		metrics.Default, // используем глобальный экземпляр метрик
+		metrics.Default,
 	)
 
 	// Обновляем usecases с новым decoratedUnifiedTaskUC
@@ -203,7 +211,7 @@ func main() {
 
 	//Создаем consumer
 	kafkaHandler := brokerhandlers.NewKafkaMessageHandler(registry, logMgr.Get("kafka"))
-	cons, err := kafka.NewConsumerWithHandler(ctx, kafkaHandler, cfg.Broker.Topics, kafka.ConsumerConfig{
+	consumerConfig := kafka.ConsumerConfig{
 		BootstrapServers:     cfg.Broker.BootstrapService,
 		ClientID:             cfg.Broker.ClientID,
 		GroupID:              cfg.Broker.ConsumerGroupID,
@@ -211,7 +219,8 @@ func main() {
 		AutoCommitIntervalMs: cfg.Broker.ConsumerAutoCommitIntervalMs,
 		SessionTimeoutMs:     cfg.Broker.ConsumerSessionTimeoutMs,
 		HeartbeatIntervalMs:  cfg.Broker.ConsumerHeartbeatIntervalMs,
-	}, logMgr.Get("kafka"))
+	}
+	cons, err := kafka.NewConsumerWithHandler(ctx, kafkaHandler, cfg.Broker.Topics, consumerConfig, logMgr.Get("kafka"))
 	if err != nil {
 		l.Error("failed to create kafka consumer", "error", err)
 		os.Exit(1)
@@ -226,7 +235,7 @@ func main() {
 		l.Info("kafka consumer stopped")
 	}()
 
-	//## HTTP сервер (главный поток)
+	//## HTTP сервер
 	httpServer := httpserver.New(logMgr.Get("app"), httpserver.Port(cfg.Server.Port), httpserver.ReadTimeout(cfg.Server.ReadTimeout))
 	handlers.NewRoutes(httpServer.Engine(), cfg, *usecases, logMgr.Get("http"))
 

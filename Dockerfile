@@ -30,7 +30,46 @@ RUN swag init -g cmd/api/main.go -o docs --parseDependency --parseInternal
 RUN CGO_ENABLED=1 GOOS=linux go build -ldflags="-s -w" -o app ./cmd/api
 
 # ============================================
-# Базовый образ runtime (общий слой)
+# Dev образ - для разработки с go run
+# ============================================
+FROM golang:1.25 AS dev
+
+# Устанавливаем зависимости для компиляции confluent-kafka-go (требует CGO)
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    librdkafka-dev \
+    pkg-config \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Устанавливаем air для hot reload
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+# Копируем go.mod и go.sum для кэширования зависимостей
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Копируем исходники
+COPY . .
+
+# Устанавливаем swag для генерации swagger документации
+RUN go install github.com/swaggo/swag/cmd/swag@v1.8.12
+
+# Генерируем swagger документацию
+RUN swag init -g cmd/api/main.go -o docs --parseDependency --parseInternal
+
+ENV SERVER_PORT=8080
+EXPOSE ${SERVER_PORT}
+
+# CMD будет переопределён в docker-compose для запуска go run или air
+CMD ["go", "run", "cmd/api/main.go"]
+
+# ============================================
+# Базовый образ runtime (общий слой для prod)
 # ============================================
 FROM debian:bookworm-slim AS base
 
@@ -38,6 +77,7 @@ FROM debian:bookworm-slim AS base
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     librdkafka1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -52,16 +92,8 @@ USER appuser
 ENV SERVER_PORT=8080
 EXPOSE ${SERVER_PORT}
 
-# ============================================
-# Dev образ (использует config.yaml из проекта)
-# ============================================
-FROM base AS dev
-
-# В dev режиме используем config-docker-dev.yaml из директории проекта
-ARG CONFIG_FILE=config-docker-dev.yaml
-WORKDIR /app
-COPY --chown=appuser:appuser ${CONFIG_FILE} ./config.yaml
-CMD ["./app"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${SERVER_PORT}/health/live || exit 1
 
 # ============================================
 # Prod образ (использует только переменные окружения из .env)
@@ -72,19 +104,3 @@ FROM base AS prod
 # Файл config.yaml не копируется - используется .env
 
 CMD ["./app"]
-
-# ============================================
-# Финальный образ (по умолчанию dev)
-# ============================================
-FROM dev
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${SERVER_PORT}/health/live || exit 1
-# Использование:
-#
-# Dev режим (по умолчанию, использует config.yaml из проекта):
-#   docker build -t task-manager:dev --target dev .
-#   docker-compose build task-manager  # использует target: dev из docker-compose.yaml
-#
-# Prod режим (использует только переменные окружения из .env):
-#   docker build -t task-manager:prod --target prod .
-#   или в docker-compose.yaml изменить target: dev на target: prod

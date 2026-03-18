@@ -67,7 +67,7 @@ type BrokerConfig struct {
 
 type LoggerConfig struct {
 	Level        string `mapstructure:"level" validate:"oneof=debug info warn error fatal" yaml:"level" env:"LOGGER_LEVEL"`
-	Format       string `mapstructure:"format" validate:"oneof=text json"`
+	Format       string `mapstructure:"format" validate:"oneof=text json" env:"LOGGER_FORMAT"`
 	Mode         string `mapstructure:"Mode" yaml:"mode" env:"LOGGER_MODE"`
 	AppPath      string `mapstructure:"app_path" yaml:"app_path" env:"LOGGER_APP_PATH"`
 	HealthPath   string `mapstructure:"health_path" yaml:"health_path" env:"LOGGER_HEALTH_PATH"`
@@ -132,16 +132,12 @@ type TaskConfig struct {
 func Load(l logger.Interface) (*Config, error) {
 	var cfg Config
 
-	// Сначала пытаемся загрузить из файла
-	if err := cleanenv.ReadConfig("config.yaml", &cfg); err != nil {
-		// Если файла нет, загружаем только из env
-		if err := cleanenv.ReadEnv(&cfg); err != nil {
-			return nil, err
-		}
-		l.Info("config loaded from environment variables only")
-	} else {
-		l.Info("config loaded from file and environment variables")
+	// Загружаем конфигурацию только из переменных окружения
+	if err := cleanenv.ReadEnv(&cfg); err != nil {
+		return nil, err
 	}
+
+	l.Info("config loaded from environment variables only")
 
 	// Валидация конфигурации
 	validate := validator.New()

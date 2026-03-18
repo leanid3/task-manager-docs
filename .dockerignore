@@ -11,6 +11,8 @@
 .env.development
 .env.test
 .env.production
+api
+bin
 Dockerfile
 docker-compose
 logs
