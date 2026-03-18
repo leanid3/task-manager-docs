@@ -21,3 +21,16 @@ docs
 Makefile
 README.md
 config.example.yaml
+.git
+.gitignore
+README.md
+Dockerfile
+.dockerignore
+.env
+.env.*
+*.log
+tmp/
+vendor/
+node_modules/
+coverage/
+*.test.go
