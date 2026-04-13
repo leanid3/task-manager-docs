@@ -1,10 +1,10 @@
 package usecase
 
 import (
-	"app/internal/entity/broker"
 	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
 	"app/internal/entity/repository"
+	"app/internal/service"
 	pkgminio "app/pkg/minio"
 	"context"
 	"encoding/json"
@@ -24,12 +24,12 @@ type TaskLLMUCInterface interface {
 
 type TaskLLMUC struct {
 	taskRepo    repository.Task
-	producer    broker.Producer
-	storageRepo repository.Storage
+	producer    service.Broker
+	storageRepo service.Storage
 	topic       string
 }
 
-func NewTaskLLMUC(taskRepo repository.Task, producer broker.Producer, storageRepo repository.Storage, topic string) *TaskLLMUC {
+func NewTaskLLMUC(taskRepo repository.Task, producer service.Broker, storageRepo service.Storage, topic string) *TaskLLMUC {
 	return &TaskLLMUC{
 		taskRepo:    taskRepo,
 		producer:    producer,

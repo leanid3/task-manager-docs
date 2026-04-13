@@ -145,7 +145,7 @@ func TestUnifiedTaskIntegration(t *testing.T) {
 
 	// Тест создания задачи
 	ctx := context.Background()
-	input := domain.TaskInput{
+	input := usecase.TaskInput{
 		TaskID:    taskID,
 		Filename:  "test.pdf",
 		Filesize:  1024,
@@ -175,7 +175,7 @@ func TestUnifiedTaskIntegration(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Проверяем обновление статуса задачи
-	event := domain.TaskEvent{
+	event := usecase.TaskEvent{
 		Key: domain.TaskContractKey{TaskID: taskID},
 		Headers: domain.TaskContractHeaders{
 			Status:   domain.TaskStatusProcessing.ToKafkaCode(),

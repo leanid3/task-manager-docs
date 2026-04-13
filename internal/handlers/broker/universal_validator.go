@@ -4,6 +4,7 @@ import (
 	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
 	"app/internal/handlers/broker/extractors"
+	"app/internal/usecase"
 	"encoding/json"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
@@ -21,7 +22,7 @@ func NewUniversalValidator(extractor *extractors.HeaderExtractor) *UniversalVali
 }
 
 // Validate валидирует сообщение и возвращает универсальное событие
-func (v *UniversalValidator) Validate(msg *kafka.Message) (*domain.TaskEvent, error) {
+func (v *UniversalValidator) Validate(msg *kafka.Message) (*usecase.TaskEvent, error) {
 	// 1) Key: task_id (обязательный)
 	taskIDStr := string(msg.Key)
 	if taskIDStr == "" {
@@ -57,7 +58,7 @@ func (v *UniversalValidator) Validate(msg *kafka.Message) (*domain.TaskEvent, er
 	}
 
 	// 5) Собираем событие
-	event := &domain.TaskEvent{
+	event := &usecase.TaskEvent{
 		Key: domain.TaskContractKey{
 			TaskID: taskID,
 		},

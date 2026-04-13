@@ -2,14 +2,12 @@ package v1
 
 import (
 	"app/internal/entity/domain"
+	apperrors "app/internal/entity/errors"
 	"app/pkg/response"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
-
-	apperrors "app/internal/entity/errors"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -27,11 +25,6 @@ type GetTaskResponse struct {
 	Status       domain.TaskStatus `json:"status"`
 	TaskResults  json.RawMessage   `json:"task_results,omitempty"`
 	ErrorMessage string            `json:"error_message,omitempty"`
-}
-
-type TaskLLMUCInterface interface {
-	CreateTask(ctx context.Context, reader io.Reader, filename string, filesize int64, requestID string) (uuid.UUID, error)
-	GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error)
 }
 
 // createTask создает задачу обработки файла с потоковой загрузкой
@@ -81,7 +74,7 @@ func (r *V1) createTask(c *gin.Context) {
 	)
 
 	// создание задачи
-	taskID, err := r.uc.TaskLLMUC.CreateTask(ctx, c.Request.Body, filename, contentLength, requestID)
+	taskID, err := r.taskLLMUC.CreateTask(ctx, c.Request.Body, filename, contentLength, requestID)
 	if err != nil {
 		r.handleError(c, err, "create_task")
 		return
@@ -128,7 +121,7 @@ func (r *V1) getTaskByID(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), r.cfg.Server.Timeout)
 	defer cancel()
 
-	task, err := r.uc.TaskLLMUC.GetTaskByID(ctx, taskID)
+	task, err := r.taskLLMUC.GetTaskByID(ctx, taskID)
 	if err != nil {
 		r.handleError(c, err, "get_task_by_id")
 		return

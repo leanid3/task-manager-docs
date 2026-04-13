@@ -1,10 +1,10 @@
 package multiupload
 
 import (
-	"app/internal/entity/broker"
 	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
 	"app/internal/entity/repository"
+	"app/internal/service"
 	pkgminio "app/pkg/minio"
 	"context"
 	"encoding/json"
@@ -25,13 +25,13 @@ type MultiUploadUCInterface interface {
 
 type MultiUploadUC struct {
 	taskRepo    repository.Task
-	producer    broker.Producer
-	storageRepo repository.Storage
+	producer    service.Broker
+	storageRepo service.Storage
 	topic       string
 	semaphore   chan struct{} // семафор для ограничения числа одновременных загрузок
 }
 
-func NewMultiUploadUC(taskRepo repository.Task, producer broker.Producer, storageRepo repository.Storage, topic string, maxConcurrentUploads int) *MultiUploadUC {
+func NewMultiUploadUC(taskRepo repository.Task, producer service.Broker, storageRepo service.Storage, topic string, maxConcurrentUploads int) *MultiUploadUC {
 	return &MultiUploadUC{
 		taskRepo:    taskRepo,
 		producer:    producer,

@@ -11,12 +11,12 @@ import (
 
 // MetricsDecorator декоратор для добавления метрик к usecase
 type MetricsDecorator struct {
-	next    domain.TaskManager
+	next    TaskManager
 	metrics metrics.Interface
 }
 
 // NewMetricsDecorator создает новый декоратор метрик
-func NewMetricsDecorator(next domain.TaskManager, metrics metrics.Interface) *MetricsDecorator {
+func NewMetricsDecorator(next TaskManager, metrics metrics.Interface) *MetricsDecorator {
 	return &MetricsDecorator{
 		next:    next,
 		metrics: metrics,
@@ -24,7 +24,7 @@ func NewMetricsDecorator(next domain.TaskManager, metrics metrics.Interface) *Me
 }
 
 // CreateTask создает задачу с измерением метрик
-func (md *MetricsDecorator) CreateTask(ctx context.Context, input domain.TaskInput) (uuid.UUID, error) {
+func (md *MetricsDecorator) CreateTask(ctx context.Context, input TaskInput) (uuid.UUID, error) {
 	start := time.Now()
 	taskID, err := md.next.CreateTask(ctx, input)
 	duration := time.Since(start)
@@ -58,7 +58,7 @@ func (md *MetricsDecorator) GetTaskByID(ctx context.Context, id uuid.UUID) (doma
 }
 
 // UpdateTaskStatus обновляет статус задачи с измерением метрик
-func (md *MetricsDecorator) UpdateTaskStatus(ctx context.Context, event domain.TaskEvent) error {
+func (md *MetricsDecorator) UpdateTaskStatus(ctx context.Context, event TaskEvent) error {
 	start := time.Now()
 	err := md.next.UpdateTaskStatus(ctx, event)
 	duration := time.Since(start)

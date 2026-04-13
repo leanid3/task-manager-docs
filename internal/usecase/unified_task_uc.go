@@ -3,6 +3,7 @@ package usecase
 import (
 	"app/internal/entity/domain"
 	"app/internal/entity/repository"
+	"app/internal/service"
 	"context"
 	"encoding/json"
 	"time"
@@ -13,15 +14,15 @@ import (
 // UnifiedTaskUC универсальный usecase для обработки различных типов задач
 type UnifiedTaskUC struct {
 	taskRepo             repository.Task
-	storageRepo          repository.Storage
-	taskProcessorFactory domain.TaskProcessorFactory
+	storageRepo          service.Storage
+	taskProcessorFactory TaskProcessorFactory
 }
 
 // NewUnifiedTaskUC создает новый универсальный usecase для задач
 func NewUnifiedTaskUC(
 	taskRepo repository.Task,
-	storageRepo repository.Storage,
-	taskProcessorFactory domain.TaskProcessorFactory,
+	storageRepo service.Storage,
+	taskProcessorFactory TaskProcessorFactory,
 ) *UnifiedTaskUC {
 	return &UnifiedTaskUC{
 		taskRepo:             taskRepo,
@@ -31,7 +32,7 @@ func NewUnifiedTaskUC(
 }
 
 // CreateTask создает задачу любого типа
-func (uc *UnifiedTaskUC) CreateTask(ctx context.Context, input domain.TaskInput) (uuid.UUID, error) {
+func (uc *UnifiedTaskUC) CreateTask(ctx context.Context, input TaskInput) (uuid.UUID, error) {
 	taskID := input.TaskID
 	if taskID == uuid.Nil {
 		taskID = uuid.New()
@@ -68,7 +69,7 @@ func (uc *UnifiedTaskUC) GetTaskByID(ctx context.Context, id uuid.UUID) (domain.
 }
 
 // UpdateTaskStatus обновляет статус задачи
-func (uc *UnifiedTaskUC) UpdateTaskStatus(ctx context.Context, event domain.TaskEvent) error {
+func (uc *UnifiedTaskUC) UpdateTaskStatus(ctx context.Context, event TaskEvent) error {
 	taskID := event.Key.TaskID
 
 	// Преобразуем статус из числового кода в enum

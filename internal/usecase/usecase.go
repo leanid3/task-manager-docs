@@ -1,17 +1,18 @@
 package usecase
 
 import (
-	"app/internal/entity/domain"
 	multiuploaduc "app/internal/usecase/multiupload"
 )
 
+// UseCases контейнер всех usecase приложения
 type UseCases struct {
 	TaskLLMUC     TaskLLMUCInterface
-	UnifiedTaskUC domain.TaskManager
+	UnifiedTaskUC TaskManager
 	MultiUploadUC multiuploaduc.MultiUploadUCInterface
 }
 
-func NewUseCases(taskLLMUC TaskLLMUCInterface, unifiedTaskUC domain.TaskManager, multiUploadUC multiuploaduc.MultiUploadUCInterface) *UseCases {
+// NewUseCases собирает контейнер usecase
+func NewUseCases(taskLLMUC TaskLLMUCInterface, unifiedTaskUC TaskManager, multiUploadUC multiuploaduc.MultiUploadUCInterface) *UseCases {
 	return &UseCases{
 		TaskLLMUC:     taskLLMUC,
 		UnifiedTaskUC: unifiedTaskUC,

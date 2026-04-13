@@ -13,7 +13,6 @@ import (
 	database "app/pkg/database/connector/sql/postgres"
 	"app/pkg/httpserver"
 	"app/pkg/kafka"
-	"app/pkg/limits"
 	"app/pkg/logger"
 	"app/pkg/metrics"
 	pkgminio "app/pkg/minio"
@@ -126,34 +125,24 @@ func main() {
 	taskRepo := postgres.NewTaskRepositoryWithMetrics(postgresConnector.Pool())
 	storageRepo := minio.NewMinioAdapterWithMetrics(minioConnector, logMgr.Get("minio"))
 
-	//Core пакеты
-	// Создаем ограничитель ресурсов
-	resourceLimiter := limits.NewSemaphoreResourceLimiter()
-	resourceLimiter.SetLimit("tasks", 100) // Максимум 100 одновременных задач
-	//TODO проверить связь с baseTaskUC
 	// Фабрика процессоров задач
 	taskProcessorFactory := usecase.NewTaskProcessorFactory()
 
-	// Создаем чистый usecase
+	// === UnifiedTaskUC (универсальная обработка задач) ===
 	baseUnifiedTaskUC := usecase.NewUnifiedTaskUC(taskRepo, storageRepo, taskProcessorFactory)
-
-	// Оборачиваем в декораторы
 	unifiedTaskUC := usecase.NewMetricsDecorator(
-		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("app")),
+		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("task")),
 		metrics.Default,
 	)
 
-	//Custom usecase
-	// Создаем чистый TaskLLMUC
+	// === TaskLLMUC (LLM задачи) ===
 	baseTaskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0])
-
-	// Оборачиваем в декораторы
 	taskLLMUC := usecase.NewMetricsDecoratorTaskLLM(
 		usecase.NewLoggingDecoratorTaskLLM(baseTaskLLMUC, logMgr.Get("task")),
 		metrics.Default,
 	)
 
-	// Создаем MultiUploadUC
+	// === MultiUploadUC (многофайловая загрузка) ===
 	baseMultiUploadUC := multiuploaduc.NewMultiUploadUC(
 		taskRepo,
 		kafkaProducer,
@@ -161,31 +150,17 @@ func main() {
 		cfg.Broker.Topics[0],
 		10,
 	)
-
-	// Оборачиваем в декораторы
 	multiUploadUC := usecase.NewMetricsDecoratorMultiUpload(
 		usecase.NewLoggingDecoratorMultiUpload(baseMultiUploadUC, logMgr.Get("task")),
 		metrics.Default,
 	)
 
-	// Сборка custom usecase в общий usecases
+	// Сборка всех usecase в контейнер
 	usecases := usecase.NewUseCases(
 		taskLLMUC,
 		unifiedTaskUC,
 		multiUploadUC,
 	)
-
-	// Создаем чистый usecase
-	baseUnifiedTaskUC = usecase.NewUnifiedTaskUC(taskRepo, storageRepo, taskProcessorFactory)
-
-	// Оборачиваем в декораторы
-	decoratedUnifiedTaskUC := usecase.NewMetricsDecorator(
-		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("task")),
-		metrics.Default,
-	)
-
-	// Обновляем usecases с новым decoratedUnifiedTaskUC
-	usecases = usecase.NewUseCases(taskLLMUC, decoratedUnifiedTaskUC, multiUploadUC)
 
 	l.Info("application components initialized",
 		"task_repo", "created",

@@ -11,12 +11,12 @@ import (
 
 // LoggingDecorator декоратор для добавления логирования к usecase
 type LoggingDecorator struct {
-	next   domain.TaskManager
+	next   TaskManager
 	logger logger.Interface
 }
 
 // NewLoggingDecorator создает новый декоратор логирования
-func NewLoggingDecorator(next domain.TaskManager, logger logger.Interface) *LoggingDecorator {
+func NewLoggingDecorator(next TaskManager, logger logger.Interface) *LoggingDecorator {
 	return &LoggingDecorator{
 		next:   next,
 		logger: logger,
@@ -24,7 +24,7 @@ func NewLoggingDecorator(next domain.TaskManager, logger logger.Interface) *Logg
 }
 
 // CreateTask создает задачу с логированием
-func (ld *LoggingDecorator) CreateTask(ctx context.Context, input domain.TaskInput) (uuid.UUID, error) {
+func (ld *LoggingDecorator) CreateTask(ctx context.Context, input TaskInput) (uuid.UUID, error) {
 	ld.logger.Info("creating task", "request_id", input.RequestID)
 	taskID, err := ld.next.CreateTask(ctx, input)
 	if err != nil {
@@ -48,7 +48,7 @@ func (ld *LoggingDecorator) GetTaskByID(ctx context.Context, id uuid.UUID) (doma
 }
 
 // UpdateTaskStatus обновляет статус задачи с логированием
-func (ld *LoggingDecorator) UpdateTaskStatus(ctx context.Context, event domain.TaskEvent) error {
+func (ld *LoggingDecorator) UpdateTaskStatus(ctx context.Context, event TaskEvent) error {
 	ld.logger.Debug("updating task status", "task_id", event.Key.TaskID, "status_code", event.Headers.Status)
 	err := ld.next.UpdateTaskStatus(ctx, event)
 	if err != nil {

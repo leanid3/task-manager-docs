@@ -7,18 +7,18 @@ import (
 
 // TaskProcessorFactoryImpl реализация фабрики обработчиков задач
 type TaskProcessorFactoryImpl struct {
-	processors map[domain.TaskType]domain.TaskProcessor
+	processors map[domain.TaskType]TaskProcessor
 }
 
 // NewTaskProcessorFactory создает новую фабрику обработчиков задач
-func NewTaskProcessorFactory() domain.TaskProcessorFactory {
+func NewTaskProcessorFactory() TaskProcessorFactory {
 	return &TaskProcessorFactoryImpl{
-		processors: make(map[domain.TaskType]domain.TaskProcessor),
+		processors: make(map[domain.TaskType]TaskProcessor),
 	}
 }
 
 // Create создает обработчик задачи по типу
-func (f *TaskProcessorFactoryImpl) Create(taskType domain.TaskType) (domain.TaskProcessor, error) {
+func (f *TaskProcessorFactoryImpl) Create(taskType domain.TaskType) (TaskProcessor, error) {
 	processor, exists := f.processors[taskType]
 	if !exists {
 		return nil, fmt.Errorf("processor for task type '%s' not registered", taskType)
@@ -27,7 +27,7 @@ func (f *TaskProcessorFactoryImpl) Create(taskType domain.TaskType) (domain.Task
 }
 
 // Register регистрирует обработчик задачи
-func (f *TaskProcessorFactoryImpl) Register(taskType domain.TaskType, processor domain.TaskProcessor) error {
+func (f *TaskProcessorFactoryImpl) Register(taskType domain.TaskType, processor TaskProcessor) error {
 	f.processors[taskType] = processor
 	return nil
 }

@@ -3,18 +3,18 @@ package broker
 import (
 	"context"
 
-	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
+	"app/internal/usecase"
 	"app/pkg/logger"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 // UniversalValidatorFunc универсальная функция валидации для любых типов событий
-type UniversalValidatorFunc func(*kafka.Message) (*domain.TaskEvent, error)
+type UniversalValidatorFunc func(*kafka.Message) (*usecase.TaskEvent, error)
 
 // UniversalUseCaseFunc универсальная функция обработки для любых типов событий
-type UniversalUseCaseFunc func(context.Context, *domain.TaskEvent) error
+type UniversalUseCaseFunc func(context.Context, *usecase.TaskEvent) error
 
 // UniversalRoute универсальный обработчик для всех типов задач
 type UniversalRoute struct {

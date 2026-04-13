@@ -105,25 +105,25 @@ func (m *MockStorageRepository) GenerateStoragePath(taskID uuid.UUID, filename s
 	return args.String(0)
 }
 
-// MockTaskProcessorFactory - мок для domain.TaskProcessorFactory
+// MockTaskProcessorFactory - мок для TaskProcessorFactory
 type MockTaskProcessorFactory struct {
 	mock.Mock
 }
 
-func (m *MockTaskProcessorFactory) Create(taskType domain.TaskType) (domain.TaskProcessor, error) {
+func (m *MockTaskProcessorFactory) Create(taskType domain.TaskType) (TaskProcessor, error) {
 	args := m.Called(taskType)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(domain.TaskProcessor), args.Error(1)
+	return args.Get(0).(TaskProcessor), args.Error(1)
 }
 
-func (m *MockTaskProcessorFactory) Register(taskType domain.TaskType, processor domain.TaskProcessor) error {
+func (m *MockTaskProcessorFactory) Register(taskType domain.TaskType, processor TaskProcessor) error {
 	args := m.Called(taskType, processor)
 	return args.Error(0)
 }
 
-// MockTaskProcessor - мок для domain.TaskProcessor
+// MockTaskProcessor - мок для TaskProcessor
 type MockTaskProcessor struct {
 	mock.Mock
 }
@@ -151,13 +151,13 @@ func (m *MockTaskProcessor) GetTimeout() time.Duration {
 func TestUnifiedTaskUC_CreateTask(t *testing.T) {
 	tests := []struct {
 		name          string
-		input         domain.TaskInput
+		input         TaskInput
 		setupMocks    func(*MockTaskRepository, *MockStorageRepository)
 		expectedError bool
 	}{
 		{
 			name: "successful task creation",
-			input: domain.TaskInput{
+			input: TaskInput{
 				TaskID:    uuid.New(),
 				Filename:  "test.pdf",
 				Filesize:  1024,
@@ -171,7 +171,7 @@ func TestUnifiedTaskUC_CreateTask(t *testing.T) {
 		},
 		{
 			name: "task creation with database error",
-			input: domain.TaskInput{
+			input: TaskInput{
 				TaskID:    uuid.New(),
 				Filename:  "test.pdf",
 				Filesize:  1024,
@@ -262,13 +262,13 @@ func TestUnifiedTaskUC_GetTaskByID(t *testing.T) {
 func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 	tests := []struct {
 		name          string
-		event         domain.TaskEvent
+		event         TaskEvent
 		setupMocks    func(*MockTaskRepository, *MockStorageRepository)
 		expectedError bool
 	}{
 		{
 			name: "update to processing status",
-			event: domain.TaskEvent{
+			event: TaskEvent{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -288,7 +288,7 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 		},
 		{
 			name: "update to completed status with result",
-			event: domain.TaskEvent{
+			event: TaskEvent{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -311,7 +311,7 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 		},
 		{
 			name: "update to failed status with error",
-			event: domain.TaskEvent{
+			event: TaskEvent{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -334,7 +334,7 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 		},
 		{
 			name: "unknown status code",
-			event: domain.TaskEvent{
+			event: TaskEvent{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},
@@ -350,7 +350,7 @@ func TestUnifiedTaskUC_UpdateTaskStatus(t *testing.T) {
 		},
 		{
 			name: "get task error",
-			event: domain.TaskEvent{
+			event: TaskEvent{
 				Key: domain.TaskContractKey{
 					TaskID: uuid.New(),
 				},

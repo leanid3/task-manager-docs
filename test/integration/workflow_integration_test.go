@@ -5,6 +5,7 @@ import (
 	"app/internal/entity/repository"
 	"app/internal/infrastructure/adapter/database/postgres"
 	"app/internal/infrastructure/adapter/storage/minio"
+	"app/internal/service"
 	"app/internal/usecase"
 	pg_connector "app/pkg/database/connector/sql/postgres"
 	"app/pkg/logger"
@@ -27,7 +28,7 @@ import (
 
 type TestComponents struct {
 	TaskRepo    repository.Task
-	StorageRepo repository.Storage
+	StorageRepo service.Storage
 	Logger      logger.Interface
 	DBContainer testcontainers.Container
 	MinioCont   testcontainers.Container
@@ -199,7 +200,7 @@ func TestTaskWorkflow_Integration(t *testing.T) {
 
 	// Step 1: Create a task
 	taskID := uuid.New()
-	taskInput := domain.TaskInput{
+	taskInput := usecase.TaskInput{
 		TaskID:    taskID,
 		Filename:  "test-document.pdf",
 		Filesize:  1024,
@@ -223,7 +224,7 @@ func TestTaskWorkflow_Integration(t *testing.T) {
 
 	// Step 2: Simulate task processing by updating status to processing
 	traceID := uuid.New()
-	eventProcessing := domain.TaskEvent{
+	eventProcessing := usecase.TaskEvent{
 		Key: domain.TaskContractKey{
 			TaskID: createdTaskID,
 		},
@@ -254,7 +255,7 @@ func TestTaskWorkflow_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	traceID2 := uuid.New()
-	eventCompleted := domain.TaskEvent{
+	eventCompleted := usecase.TaskEvent{
 		Key: domain.TaskContractKey{
 			TaskID: createdTaskID,
 		},
@@ -319,7 +320,7 @@ func TestTaskWorkflow_WithFileStorage_Integration(t *testing.T) {
 	assert.True(t, exists)
 
 	// Step 2: Create the task in the database referencing the stored file
-	taskInput := domain.TaskInput{
+	taskInput := usecase.TaskInput{
 		TaskID:    taskID,
 		Filename:  "test-document.pdf",
 		Filesize:  int64(len(docContent)),
@@ -336,7 +337,7 @@ func TestTaskWorkflow_WithFileStorage_Integration(t *testing.T) {
 
 	// Step 3: Process the task (simulated)
 	traceID3 := uuid.New()
-	eventProcessing := domain.TaskEvent{
+	eventProcessing := usecase.TaskEvent{
 		Key: domain.TaskContractKey{
 			TaskID: createdTaskID,
 		},
@@ -359,7 +360,7 @@ func TestTaskWorkflow_WithFileStorage_Integration(t *testing.T) {
 	}
 
 	traceID4 := uuid.New()
-	eventCompleted := domain.TaskEvent{
+	eventCompleted := usecase.TaskEvent{
 		Key: domain.TaskContractKey{
 			TaskID: createdTaskID,
 		},

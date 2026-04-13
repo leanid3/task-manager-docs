@@ -4,7 +4,6 @@ import (
 	"app/config"
 	"app/internal/entity/domain"
 	apperrors "app/internal/entity/errors"
-	"app/internal/usecase"
 	"app/test/mocks"
 	"bytes"
 	"io"
@@ -38,17 +37,16 @@ func newTestContext(method, path string, body io.Reader, headers map[string]stri
 // Helper для создания V1 с моками
 func newTestV1() *V1 {
 	taskMock := &mocks.TaskLLMUC{}
-	uc := usecase.UseCases{TaskLLMUC: taskMock}
 	cfg := config.Config{
 		Server: config.ServerConfig{Timeout: time.Second * 5},
 	}
 	l := mocks.NewMockLogger()
 
 	return &V1{
-		uc:  uc,
-		l:   l,
-		cfg: cfg,
-		v:   validator.New(validator.WithRequiredStructEnabled()),
+		taskLLMUC: taskMock,
+		l:         l,
+		cfg:       cfg,
+		v:         validator.New(validator.WithRequiredStructEnabled()),
 	}
 }
 
@@ -131,7 +129,7 @@ func TestCreateTask(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Создаем свежие моки для каждого теста
 			v1Handler := newTestV1()
-			taskMock := v1Handler.uc.TaskLLMUC.(*mocks.TaskLLMUC)
+			taskMock := v1Handler.taskLLMUC.(*mocks.TaskLLMUC)
 
 			body := tt.body
 			if body == nil {
@@ -225,7 +223,7 @@ func TestGetTaskByID(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 
 			v1Handler := newTestV1()
-			taskMock := v1Handler.uc.TaskLLMUC.(*mocks.TaskLLMUC)
+			taskMock := v1Handler.taskLLMUC.(*mocks.TaskLLMUC)
 
 			if tt.mockTask != nil || tt.mockError != nil {
 				validUUID := uuid.MustParse(tt.taskIDStr)
