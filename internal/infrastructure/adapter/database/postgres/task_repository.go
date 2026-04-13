@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"app/internal/entity/domain"
-	"app/pkg/database"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,7 +14,7 @@ import (
 
 // TaskRepository реализует интерфейс repository.Task
 type TaskRepository struct {
-	db database.DB
+	db *pgxpool.Pool
 }
 
 func NewTaskRepository(pool *pgxpool.Pool) *TaskRepository {

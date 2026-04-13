@@ -15,13 +15,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// TaskLLMUCInterface интерфейс для TaskLLMUC
-type TaskLLMUCInterface interface {
-	CreateTask(ctx context.Context, reader io.Reader, filename string, filesize int64, requestID string) (uuid.UUID, error)
-	GetTaskByID(ctx context.Context, id uuid.UUID) (domain.Task, error)
-	UpdateTaskStatus(ctx context.Context, evt domain.BrokerCommand[domain.TaskLLMStatusEventPayload]) error
-}
-
 type TaskLLMUC struct {
 	taskRepo    repository.Task
 	producer    service.Broker

@@ -125,16 +125,6 @@ func main() {
 	taskRepo := postgres.NewTaskRepositoryWithMetrics(postgresConnector.Pool())
 	storageRepo := minio.NewMinioAdapterWithMetrics(minioConnector, logMgr.Get("minio"))
 
-	// Фабрика процессоров задач
-	taskProcessorFactory := usecase.NewTaskProcessorFactory()
-
-	// === UnifiedTaskUC (универсальная обработка задач) ===
-	baseUnifiedTaskUC := usecase.NewUnifiedTaskUC(taskRepo, storageRepo, taskProcessorFactory)
-	unifiedTaskUC := usecase.NewMetricsDecorator(
-		usecase.NewLoggingDecorator(baseUnifiedTaskUC, logMgr.Get("task")),
-		metrics.Default,
-	)
-
 	// === TaskLLMUC (LLM задачи) ===
 	baseTaskLLMUC := usecase.NewTaskLLMUC(taskRepo, kafkaProducer, storageRepo, cfg.Broker.Topics[0])
 	taskLLMUC := usecase.NewMetricsDecoratorTaskLLM(
@@ -156,16 +146,13 @@ func main() {
 	)
 
 	// Сборка всех usecase в контейнер
-	usecases := usecase.NewUseCases(
-		taskLLMUC,
-		unifiedTaskUC,
-		multiUploadUC,
-	)
+	usecases := usecase.NewUseCases(taskLLMUC, multiUploadUC)
 
 	l.Info("application components initialized",
 		"task_repo", "created",
 		"storage_repo", "created",
-		"task_usecase", "created")
+		"task_llm_uc", "created",
+		"multi_upload_uc", "created")
 
 	// Health check
 	if err := postgresConnector.HealthCheck(context.Background()); err != nil {
