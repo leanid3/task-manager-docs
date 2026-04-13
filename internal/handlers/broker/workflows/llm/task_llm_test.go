@@ -175,6 +175,60 @@ func TestTaskLLMValidator_Validate(t *testing.T) {
 		assert.Empty(t, result.Value.Result)
 		assert.Empty(t, result.Value.ErrorMessage)
 	})
+
+	t.Run("NEW FORMAT: validation with error_message from updated llm-worker", func(t *testing.T) {
+		taskID := uuid.New()
+		traceID := uuid.New()
+		workerID := "worker-456"
+
+		// Сообщение в НОВОМ формате от обновленного llm-worker
+		msg := &kafka.Message{
+			Key: []byte(taskID.String()),
+			Headers: []kafka.Header{
+				{Key: "status", Value: []byte("4")}, // Failed
+				{Key: "worker_id", Value: []byte(workerID)},
+				{Key: "trace_id", Value: []byte(traceID.String())},
+			},
+			Value: []byte(`{"error_message": "Несколько штрих-кодов с надписью \"ПОЧТА РОССИИ\""}`),
+		}
+
+		result, err := validator.Validate(msg)
+
+		assert.NoError(t, err)
+		assert.Equal(t, taskID, result.Key.TaskID)
+		assert.Equal(t, 4, result.Headers.Status)
+		assert.Equal(t, workerID, result.Headers.WorkerID)
+		assert.Equal(t, &traceID, result.Headers.TraceID)
+		assert.Equal(t, `Несколько штрих-кодов с надписью "ПОЧТА РОССИИ"`, result.Value.ErrorMessage)
+		assert.Empty(t, result.Value.Result)
+	})
+
+	t.Run("NEW FORMAT: validation with result from updated llm-worker", func(t *testing.T) {
+		taskID := uuid.New()
+		traceID := uuid.New()
+		workerID := "worker-789"
+
+		// Сообщение в НОВОМ формате от обновленного llm-worker
+		msg := &kafka.Message{
+			Key: []byte(taskID.String()),
+			Headers: []kafka.Header{
+				{Key: "status", Value: []byte("3")}, // Completed
+				{Key: "worker_id", Value: []byte(workerID)},
+				{Key: "trace_id", Value: []byte(traceID.String())},
+			},
+			Value: []byte(`{"result": "{\"Статус\": \"Успешно\", \"data\": \"test\"}"}`),
+		}
+
+		result, err := validator.Validate(msg)
+
+		assert.NoError(t, err)
+		assert.Equal(t, taskID, result.Key.TaskID)
+		assert.Equal(t, 3, result.Headers.Status)
+		assert.Equal(t, workerID, result.Headers.WorkerID)
+		assert.Equal(t, &traceID, result.Headers.TraceID)
+		assert.Contains(t, string(result.Value.Result), "Статус")
+		assert.Empty(t, result.Value.ErrorMessage)
+	})
 }
 
 func TestRegister(t *testing.T) {
